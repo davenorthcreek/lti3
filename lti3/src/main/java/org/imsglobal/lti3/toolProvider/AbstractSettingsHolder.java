@@ -58,7 +58,7 @@ public abstract class AbstractSettingsHolder implements Hierarchical, HasSetting
 			preserveChildValuesPutAll(allSettings, getParentSettings(condensed));
 			if (!condensed) {
 				//only lowest level values preserved
-				allSettings = removeRepeatedValues(allSettings);
+				allSettings = removeRepeatedValues();
 			}
 			return allSettings;
 		} else {
@@ -173,29 +173,44 @@ public abstract class AbstractSettingsHolder implements Hierarchical, HasSetting
 	
 	private Map<String, Object> removeRepeatedValues() {
 		if (child == null) {
+			Map<String, Object> allSettings = this.getSettings(MODE_ALL_LEVELS, false);
 			//we are at the lowest level - recursion base case
-			return doTheRecursionHere());
+			return filterThisLevel(allSettings);
 		}
 		return child.removeRepeatedValues();
 		
 	}
 	
-	private Map<String, Object> doTheRecursionHere() throws ClassCastException {
+	Map<String, Object> filterThisLevel(Map<String, Object> allSettings) 
+			throws ClassCastException {
 		//preserve these values
-		Map<String, Object> allSettings = this.getSettings(MODE_ALL_LEVELS, false);
 		Map<String, String> preserve = (Map<String, String>)allSettings.get(level);
-		for (String theLevel : allSettings.keySet()) {
-			if (theLevel == level) {
-				continue;
-			}
-			Map<String, String> toFilter = (Map<String, String>)allSettings.get(theLevel);
-			for (String baseKey : preserve.keySet()) {
-				if (toFilter.containsKey(baseKey)) {
-					toFilter.remove(baseKey);
-				}
+		AbstractSettingsHolder levelToFilter = getParent();
+		while (levelToFilter != null) {
+			allSettings = justFilter(allSettings, preserve, levelToFilter);
+			levelToFilter = levelToFilter.getParent();
+		}
+		levelToFilter = getParent();
+		if (levelToFilter != null) {
+			return levelToFilter.filterThisLevel(allSettings);
+		} else {
+			return allSettings;
+		}
+	}
+
+	private Map<String, Object> justFilter(Map<String, Object> allSettings, Map<String, String> preserve, 
+			AbstractSettingsHolder levelToFilter) {
+		String levelFiltered = levelToFilter.getLevel();
+		Map<String, String> toFilter = (Map<String, String>)allSettings.get(levelFiltered);
+		for (String key : preserve.keySet()) {
+			if (toFilter.containsKey(key)) {
+				System.out.println("at " + level + " removing key " + key + " from " + levelToFilter.getLevel());
+				toFilter.remove(key);
 			}
 		}
-		
+		allSettings.put(levelFiltered, toFilter);
+		System.out.println(toFilter.toString());
+		return allSettings;
 	}
 
 }

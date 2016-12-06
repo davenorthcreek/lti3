@@ -187,7 +187,11 @@ public class TestSettings {
 		assertTrue("JSON coming from Link has content from link", 
 				jsonFromSystem.contains("\"testSetting2\":\"testASecondSetting\""));
 		assertTrue("JSON coming from Link has content from system", 
+				jsonFromSystem.contains("\"systemSetting\":\"SystemValue\""));
+		assertFalse("JSON coming from Link has content from system", 
 				jsonFromSystem.contains("\"commonSetting\":\"system\""));
+		assertTrue("JSON coming from Link has common content only from link", 
+				jsonFromSystem.contains("\"commonSetting\":\"link\""));
 		
 		Map<String, Object> settings = lin.getSettings(HasSettings.MODE_DISTINCT_NAMES, false);
 		assertTrue("Settings comes indexed by level", settings.containsKey("link"));
