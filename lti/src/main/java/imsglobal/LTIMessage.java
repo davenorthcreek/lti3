@@ -1,5 +1,6 @@
 package imsglobal;
 
+import java.util.List;
 import java.util.Map;
 
 import org.json.simple.JSONArray;
@@ -13,21 +14,19 @@ public class LTIMessage {
 	private String method;
 	private String body;
 	private String header;
+	private Map<String, List<String>> params;
 	private String response;
 	private JSONObject responseJson;
 	private boolean ok;
 	private JSONParser parser;
 
-	public LTIMessage(String url, String method, String body, String header) {
+	public LTIMessage(String url, String method, String data, String header, Map<String, List<String>> parameters) {
 		setUrl(url);
 		setMethod(method);
-		setBody(body);
+		setBody(data);
 		setHeader(header);
+		setParams(parameters);
 		JSONParser parser = new JSONParser();
-	}
-	
-	public LTIMessage(String endpoint, String method2, Map<String, String> data, Map<String, String> header2) {
-		//convert maps to strings and do normal constructor
 	}
 
 	public String getUrl() {
@@ -109,6 +108,14 @@ public class LTIMessage {
 		Object obj = parser.parse(raw);
 		JSONObject jsonObject = (JSONObject) obj;
 		return jsonObject;
+	}
+
+	public Map<String, List<String>> getParams() {
+		return params;
+	}
+
+	public void setParams(Map<String, List<String>> params) {
+		this.params = params;
 	}
 
 

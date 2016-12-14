@@ -143,7 +143,7 @@ public void setMediaType(String mediaType) {
         }
 
 // Connect to tool consumer
-        LTIMessage http = new LTIMessage(url, method, body, header);
+        LTIMessage http = new LTIMessage(url, method, body, header, null);
 // Parse JSON response
         if (http.send() && http.getResponse().isEmpty()) {
             http.setOk(http.getResponseJson() != null);

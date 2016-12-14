@@ -165,7 +165,7 @@ public class ToolSettings extends Service {
 	 *
 	 * @return HTTPMessage HTTP object containing request and response details
 	 */
-	    public LTIMessage set(Map<String, String> settings) {
+	    public LTIMessage set(Map<String, List<String>> settings) {
 	    	String type;
 	    	String body;
 	        if (!this.isSimple()) {

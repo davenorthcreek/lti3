@@ -1,27 +1,33 @@
 package imsglobal.toolProvider;
 
+import java.io.UnsupportedEncodingException;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLDecoder;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.codec.binary.Base64;
 import org.joda.time.DateTime;
 import org.json.simple.JSONObject;
 
-import com.github.scribejava.core.builder.ServiceBuilder;
-import com.github.scribejava.core.model.OAuth1AccessToken;
-import com.github.scribejava.core.model.OAuth1RequestToken;
-import com.github.scribejava.core.model.OAuthRequest;
-import com.github.scribejava.core.model.Response;
-import com.github.scribejava.core.model.Verb;
-import com.github.scribejava.core.oauth.OAuth10aService;
-
 import imsglobal.LTIMessage;
+import imsglobal.signature.oauth1.OAuthConsumer;
+import imsglobal.signature.oauth1.OAuthException;
+import imsglobal.signature.oauth1.OAuthRequest;
+import imsglobal.signature.oauth1.OAuthSignatureMethod;
+import imsglobal.signature.oauth1.OAuthSignatureMethod_HMAC_SHA1;
+import imsglobal.signature.oauth1.OAuthUtil;
 import imsglobal.toolProvider.dataConnector.DataConnector;
 import imsglobal.toolProvider.dataConnector.DataConnectorFactory;
 import imsglobal.toolProvider.service.Service;
 import imsglobal.toolProvider.service.ToolSettings;
-import net.oauth.OAuth;
 
 /**
  * Class to represent a tool consumer
@@ -124,7 +130,7 @@ public class ToolConsumer implements LTISource {
 	 *
 	 * @var array settings
 	 */
-	    public Map<String, String> settings = new HashMap<String, String>();
+	    public Map<String, List<String>> settings = new HashMap<String, List<String>>();
 	/**
 	 * Date/time when the object was created.
 	 *
@@ -310,6 +316,10 @@ public class ToolConsumer implements LTISource {
 	public void setKey(String key) {
 		this.key = key;
 	}
+	
+	public String getKey() {
+		return key;
+	}
 
 	public void setDataConnector(DataConnector dataConnector) {
 		this.dataConnector = dataConnector;
@@ -476,15 +486,15 @@ public class ToolConsumer implements LTISource {
 	 * @return string Setting value
 	 */
 	    public String getSetting(String name) {
-	    	getSetting(name, "");
+	    	return getSetting(name, "");
 	    }
 	    
 	    public String getSetting(String name, String thedefault)
 	    {
 	    	String value = thedefault;
-	    	Map<String, String> theSettings = getSettings();
+	    	Map<String, List<String>> theSettings = getSettings();
 	    	if (theSettings.containsKey(name)) {
-	    		value = theSettings.get(name);
+	    		value = theSettings.get(name).get(0);
 	    	}
 	        return value;
 
@@ -503,13 +513,15 @@ public class ToolConsumer implements LTISource {
 	    
 	    public void setSetting(String name, String value)
 	    {
-	    	Map<String, String> theSettings = getSettings();
+	    	Map<String, List<String>> theSettings = getSettings();
         	String old_value = getSetting(name);
 	        if (value == null || value == "") {
 	        	theSettings.remove(name);
 	        	setSettings(theSettings);
 	        } else if (value != old_value) {
-	        	theSettings.put(name, value);
+	        	List<String> theList = new ArrayList<String>();
+	        	theList.add(value);
+	        	theSettings.put(name, theList);
                 setSettings(theSettings);
 	        }
 
@@ -520,7 +532,7 @@ public class ToolConsumer implements LTISource {
 	 *
 	 * @return array Associative array of setting values
 	 */
-	    public Map<String, String> getSettings()
+	    public Map<String, List<String>> getSettings()
 	    {
 
 	        return settings;
@@ -532,7 +544,7 @@ public class ToolConsumer implements LTISource {
 	 *
 	 * @param array settings  Associative array of setting values
 	 */
-	    public void setSettings(Map<String, String> settings)
+	    public void setSettings(Map<String, List<String>> settings)
 	    {
 
 	        this.settings = settings;
@@ -581,11 +593,11 @@ public class ToolConsumer implements LTISource {
 	 * @return mixed The array of settings if successful, otherwise false
 	 */
 	    
-	    public Map<String, String> getToolSettings() {
+	    public Map<String, List<String>> getToolSettings() {
 	    	return getToolSettings(true);
 	    }
 	    
-	    public Map<String, String> getToolSettings(boolean simple)
+	    public Map<String, List<String>> getToolSettings(boolean simple)
 	    {
 
 	        String url = getSetting("custom_system_setting_url");
@@ -606,7 +618,7 @@ public class ToolConsumer implements LTISource {
 	    	return setToolSettings(null);
 	    }
 	    
-	    public boolean setToolSettings(Map<String, String> settings)
+	    public boolean setToolSettings(Map<String, List<String>> settings)
 	    {
 
 	        String url = getSetting("custom_system_setting_url");
@@ -626,63 +638,44 @@ public class ToolConsumer implements LTISource {
 	 *
 	 * @return array Array of signed message parameters
 	 */
-	    public Map signParameters(String urlString, String type, String version, Map<String, String> params)
+	    public Map<String, List<String>> signParameters(String urlString, String type, String version, Map<String, List<String>> params)
 	    {
 	    	if (urlString != null) {
 	// Check for query parameters which need to be included in the signature
-	            HashMap<String, String> queryParams = new HashMap<String, String>();
-	            URL url = new URL(urlString);
-	            String query = url.getQuery();
-	            String paramStrings[] = query.split("\\&");
-	            HashMap<String, String[]> qparams = new HashMap<String, String[]>();
-	            for (int i=0;i<paramStrings.length;i++) {
-	                String parts[] = paramStrings[i].split("=");
-	                String key = URLDecoder.decode(parts[0], "UTF-8");
-	                String value = URLDecoder.decode(parts[1], "UTF-8");
-	                String[] values = new String[1];
-	                if (qparams.containsKey(key)) {
-	                	values = qparams.get(key);
-	                }
-	                values[values.length] = value;
-	                qparams.put(key, values);
-	            }
-	            //?? Where did this line come from?
-	            //Set<String> paramVals = params.get("paramName");
-	
-	        	// Add standard parameters
-	            params.put("lti_version", version);
-	            params.put("lti_message_type", type);
-	            params.put("oauth_callback", "about:blank");
-	            params = params.putAll(qparams);
-	// Add OAuth signature
-	            OAuthSignatureMethod hmacMethod = new OAuth();
-	            OAuthConsumer consumer = new OAuth.OAuthConsumer(this.getKey(), this.getSecret(), null);
-	            //req = OAuth\OAuthRequest::from_consumer_and_token(consumer, null, 'POST', url, params);
-	            
-	            req.sign_request(hmacMethod, consumer, null);
-	            params = req.get_parameters();
-	// Remove parameters being passed on the query string
-	            for (String name : queryParams.keySet()) {
-	                queryParams.remove(name);
-	            }
+	    		try {
+	    			URL url = new URL(urlString);
+		            String query = url.getQuery();
+		            Map<String, List<String>> paramList = OAuthUtil.parse_parameters(url.getQuery());
+		
+		            params.putAll(paramList);
+		            
+		            // Add standard parameters
+		            OAuthRequest req = new OAuthRequest("POST", url);
+		            req.setParameter(params, "lti_version", version);
+		            req.setParameter(params, "lti_message_type", type);
+		            req.setParameter(params, "oauth_callback", "about:blank");
+		            
+		// Add OAuth signature
+		            OAuthSignatureMethod hmacMethod = new OAuthSignatureMethod_HMAC_SHA1();
+		            OAuthConsumer consumer = new OAuthConsumer(this.getKey(), this.getSecret(), null);
+		            req = req.from_consumer_and_token(consumer, null, "POST", url, params);
+		            //                                consumer, token, method, url, params
+		            
+		            req.sign_request(hmacMethod, consumer, null);
+		            params = req.get_parameters();
+		// Remove parameters being passed on the query string
+		            for (String name : paramList.keySet()) {
+		                params.remove(name);
+		            }
+	    		} catch (MalformedURLException e) {
+					e.printStackTrace();
+				} catch (UnsupportedEncodingException e) {
+					e.printStackTrace();
+				}
 	        }
 
 	        return params;
 
-	    }
-	    
-	    public Object signParameters() {
-	    	final OAuth10aService service = new ServiceBuilder()
-                    .apiKey(this.getKey())
-                    .apiSecret(this.getSecret())
-                    .build(ToolProvider.instance());
-	    	final OAuth1RequestToken requestToken = service.getRequestToken();
-	    	String authUrl = service.getAuthorizationUrl(requestToken);
-	    	final OAuth1AccessToken accessToken = service.getAccessToken(requestToken, "verifier you got from the user/callback");
-	    	final OAuthRequest request = new OAuthRequest(Verb.GET, "https://api.twitter.com/1.1/account/verify_credentials.json", service);
-	    	service.signRequest(accessToken, request); // the access token from step 4
-	    	final Response response = request.send();
-	    	System.out.println(response.getBody());
 	    }
 
 	/**
@@ -690,65 +683,105 @@ public class ToolConsumer implements LTISource {
 	 *
 	 * @return mixed Array of signed message parameters or header string
 	 */
-	    public static Map<String, String> addSignature(String endpoint, String consumerKey, String consumerSecret, Map<String, String> data, String method, String type)
+	    public static Map<String, List<String>> addSignature(
+	    		String endpoint, 
+	    		String consumerKey, 
+	    		String consumerSecret, 
+	    		Map<String, List<String>> data, 
+	    		String method, 
+	    		String type)
 	    {
 
-	        Map<String, String> params = new HashMap<String, String>();
+	    	Map<String, List<String>> params = new HashMap<String, List<String>>();
 	        if (data != null) {
 	            params = data;
 	        }
 	        // Check for query parameters which need to be included in the signature
-	        Map<String, String> queryParams = new HashMap<String, String>();
-	        URL url = new URL(endpoint);
-	        String queryString = url.getQuery();
-	        if (queryString != null) {
-	            String queryItems[] = queryString.split("\\&");
-	            for (int i=0; i<queryItems.length; i++) {
-	            	String item = queryItems[i];
-	                if (item.contains("=")) {
-	                    String[] parts = item.split("=");
-	                    String key = URLDecoder.decode(parts[0], "UTF-8");
-		                String value = URLDecoder.decode(parts[1], "UTF-8");
-	                    queryParams.put(key, value);
-	                } else {
-	                    queryParams.put(URLDecoder.decode(item, "UTF-8"),"");
-	                }
+			try {
+				URL url = new URL(endpoint);
+				Map<String, List<String>>paramList = OAuthUtil.parse_parameters(url.getQuery());
+	            params.putAll(paramList);
+			
+		        OAuthRequest req = new OAuthRequest(method, url);
+		// Add OAuth signature
+		        OAuthSignatureMethod hmacMethod = new OAuthSignatureMethod_HMAC_SHA1();
+		        OAuthConsumer oauthConsumer = new OAuthConsumer(consumerKey, consumerSecret, null);
+		        OAuthRequest oauthReq = req.from_consumer_and_token(oauthConsumer, null, method, url, params);
+		        oauthReq.sign_request(hmacMethod, oauthConsumer, null);
+		        params = oauthReq.get_parameters();
+		// Remove parameters being passed on the query string
+		        for (String key : paramList.keySet()) {
+		        	params.remove(key);
+		        }
+		        
+			} catch (MalformedURLException e) {
+				e.printStackTrace();
+			} catch (UnsupportedEncodingException e) {
+				e.printStackTrace();
+			}
+
+	        return params;
+        	
+	    }
+	    
+	    public static String addSignature(
+	    		String endpoint, 
+	    		String consumerKey, 
+	    		String consumerSecret, 
+	    		String data, 
+	    		String method, 
+	    		String type)
+	    {
+	    	
+	    	Map<String, List<String>> params = new HashMap<String, List<String>>();
+	    	URL url;
+	        Map<String, List<String>> paramList = new HashMap<String, List<String>>();
+	        String header = "";
+			try {
+				url = new URL(endpoint);
+				paramList = OAuthUtil.parse_parameters(url.getQuery());
+	            params.putAll(paramList);
+			
+		// Calculate body hash
+		    	MessageDigest md = MessageDigest.getInstance("SHA1");
+		    	byte[] sha1 = md.digest(data.getBytes());
+		        String hash = Base64.encodeBase64String(sha1);
+		        List<String> hashList = new ArrayList<String>();
+		        hashList.add(hash);
+		        params.put("oauth_body_hash", hashList);
+				
+				OAuthRequest req = new OAuthRequest(method, url);
+		// Add OAuth signature
+		        OAuthSignatureMethod hmacMethod = new OAuthSignatureMethod_HMAC_SHA1();
+		        OAuthConsumer oauthConsumer = new OAuthConsumer(consumerKey, consumerSecret, null);
+		        OAuthRequest oauthReq = req.from_consumer_and_token(oauthConsumer, null, method, url, params);
+		        oauthReq.sign_request(hmacMethod, oauthConsumer, null);
+		        params = oauthReq.get_parameters();
+		// Remove parameters being passed on the query string
+		        for (String key : paramList.keySet()) {
+		        	params.remove(key);
+		        }
+					    	
+	            header = oauthReq.to_header(null);
+		        if (data == null || data.equals("")) {
+		        	if (type != null) {
+		                header += "\nAccept: {" + type + "}";
+		            }
+	            } else if (type != null && !type.equals("")) {
+		            header += "\nContent-Type: {" + type + "}";
+	                header += "\nContent-Length: " + data.length();
 	            }
-	            params.putAll(queryParams);
-	        }
-
-	        if (!is_array(data)) {
-	// Calculate body hash
-	            String hash = base64_encode(sha1(data, true));
-	            params.put("oauth_body_hash", hash);
-	        }
-
-	// Add OAuth signature
-	        hmacMethod = new OAuth\OAuthSignatureMethod_HMAC_SHA1();
-	        oauthConsumer = new OAuth\OAuthConsumer(consumerKey, consumerSecret, null);
-	        oauthReq = OAuth\OAuthRequest::from_consumer_and_token(oauthConsumer, null, method, endpoint, params);
-	        oauthReq.sign_request(hmacMethod, oauthConsumer, null);
-	        params = oauthReq.get_parameters();
-	// Remove parameters being passed on the query string
-	        foreach (array_keys(queryParams) as name) {
-	            unset(params[name]);
-	        }
-
-	        if (!is_array(data)) {
-	            header = oauthReq.to_header();
-	            if (empty(data)) {
-	                if (!empty(type)) {
-	                    header .= "\nAccept: {type}";
-	                }
-	            } else if (isset(type)) {
-	                header .= "\nContent-Type: {type}";
-	                header .= "\nContent-Length: " . strlen(data);
-	            }
-	            return header;
-	        } else {
-	            return params;
-	        }
-
+			} catch (MalformedURLException e) {
+				e.printStackTrace();
+			} catch (UnsupportedEncodingException e) {
+				e.printStackTrace();
+			} catch (OAuthException e) {
+				e.printStackTrace();
+			} catch (NoSuchAlgorithmException e) {
+				e.printStackTrace();
+			}
+			
+            return header;
 	    }
 
 	/**
@@ -761,13 +794,23 @@ public class ToolConsumer implements LTISource {
 	 *
 	 * @return HTTPMessage HTTP object containing request and response details
 	 */
-	    public LTIMessage doServiceRequest(Service service, String method, String format, Map<String, String> data)
+	    public LTIMessage doServiceRequest(
+	    		Service service, 
+	    		String method, 
+	    		String format, 
+	    		Map<String, List<String>> parameters)
 	    {
 
-	        Map<String, String> header = ToolConsumer.addSignature(service.getEndpoint(), this.getKey(), this.getSecret(), data, method, format);
+	        Map<String, List<String>> params = ToolConsumer.addSignature(
+	        		service.getEndpoint(), 
+	        		this.getKey(), 
+	        		this.getSecret(), 
+	        		parameters, 
+	        		method, 
+	        		format);
 
 	// Connect to tool consumer
-	        LTIMessage http = new LTIMessage(service.getEndpoint(), method, data, header);
+	        LTIMessage http = new LTIMessage(service.getEndpoint(), method, null, null, params);
 	// Parse JSON response
 	        http.send();
 	        String response = http.getResponse();
@@ -780,28 +823,58 @@ public class ToolConsumer implements LTISource {
 
 	    }
 
+	    /**
+		 * Perform a service request
+		 *
+		 * @param object service  Service object to be executed
+		 * @param string method   HTTP action
+		 * @param string format   Media type
+		 * @param mixed  data     Array of parameters or body string
+		 *
+		 * @return HTTPMessage HTTP object containing request and response details
+		 */
+	    public LTIMessage doServiceRequest(Service service, String method, String format, String data)
+	    {
+
+	        String header = ToolConsumer.addSignature(service.getEndpoint(), this.getKey(), this.getSecret(), data, method, format);
+
+	// Connect to tool consumer
+	        LTIMessage http = new LTIMessage(service.getEndpoint(), method, data, header, null);
+	// Parse JSON response
+	        http.send();
+	        String response = http.getResponse();
+	        JSONObject json = http.getResponseJson();
+	        if (http.isOk()) {
+	        	return http;
+	        } else {
+	        	return null;
+	        }
+
+	    }
+
+	    
 	/**
 	 * Load the tool consumer from the database by its record ID.
 	 *
-	 * @param string          id                The consumer key record ID
+	 * @param int          id                The consumer key record ID
 	 * @param DataConnector   dataConnector    Database connection object
 	 *
 	 * @return object ToolConsumer       The tool consumer object
 	 */
-	    public static function fromRecordId(id, dataConnector)
-	    {
+    public static ToolConsumer fromRecordId(int id, DataConnector dataConnector)
+    {
 
-	        toolConsumer = new ToolConsumer(null, dataConnector);
+        ToolConsumer toolConsumer = new ToolConsumer(null, dataConnector);
 
-	        toolConsumer.initialize();
-	        toolConsumer.setRecordId(id);
-	        if (!dataConnector.loadToolConsumer(toolConsumer)) {
-	            toolConsumer.initialize();
-	        }
+        toolConsumer.initialize();
+        toolConsumer.setRecordId(id);
+        if (!dataConnector.loadToolConsumer(toolConsumer)) {
+            toolConsumer.initialize();
+        }
 
-	        return toolConsumer;
+        return toolConsumer;
 
-	    }
+    }
 
 
 
@@ -814,37 +887,26 @@ public class ToolConsumer implements LTISource {
 	 * @return boolean True if the consumer was successfully loaded
 	 */
 	    
-	    private boolean load(String key) {
-	    	load(key, false);
-	    }
-	    
-	    private boolean load(String key, boolean autoEnable)
-	    {
-	    	setKey(key);
-	    	DataConnector connector = DataConnectorFactory.getDataConnector();
-	        boolean ok = connector.loadToolConsumer(this);
-	        ok = this.dataConnector.loadToolConsumer(this);
-	        if (!ok) {
-	        	setEnabled(autoEnable);
-	        }
-
-	        return ok;
-
-	    }
-	    
-	public static String addSignature(String url, Object key, Object secret, String body, String method,
-			String mediaType) {
-		// TODO Auto-generated method stub
-		return null;
+	private boolean load(String key) {
+		return load(key, false);
 	}
 	
-	public ToolConsumer getConsumer() {
-		return this;
+	private boolean load(String key, boolean autoEnable)
+	{
+		setKey(key);
+		DataConnector connector = DataConnectorFactory.getDataConnector();
+	    boolean ok = connector.loadToolConsumer(this);
+	    ok = this.dataConnector.loadToolConsumer(this);
+	    if (!ok) {
+	    	setEnabled(autoEnable);
+	    }
+	
+	    return ok;
+	
 	}
 
-	public String getKey() {
-		// TODO Auto-generated method stub
-		return null;
+	public ToolConsumer getConsumer() {
+		return this;
 	}
 
 }
