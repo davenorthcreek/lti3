@@ -3,13 +3,10 @@ package imsglobal.toolProvider;
 import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.net.URLDecoder;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -894,8 +891,8 @@ public class ToolConsumer implements LTISource {
 	private boolean load(String key, boolean autoEnable)
 	{
 		setKey(key);
-		DataConnector connector = DataConnectorFactory.getDataConnector();
-	    boolean ok = connector.loadToolConsumer(this);
+		dataConnector = DataConnectorFactory.getDataConnector();
+	    boolean ok = dataConnector.loadToolConsumer(this);
 	    ok = this.dataConnector.loadToolConsumer(this);
 	    if (!ok) {
 	    	setEnabled(autoEnable);
@@ -907,6 +904,10 @@ public class ToolConsumer implements LTISource {
 
 	public ToolConsumer getConsumer() {
 		return this;
+	}
+
+	public DataConnector getDataConnector() {
+		return DataConnectorFactory.getDataConnector();
 	}
 
 }

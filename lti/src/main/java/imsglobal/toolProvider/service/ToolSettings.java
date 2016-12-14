@@ -1,6 +1,5 @@
 package imsglobal.toolProvider.service;
 
-import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -73,11 +72,6 @@ public class ToolSettings extends Service {
 
 	public void setSimple(boolean simple) {
 		this.simple = simple;
-	}
-	
-	public ToolSettings(ToolConsumer consumer, String endpoint, String mediaType) {
-		//Java requires this...
-		initialize(consumer, endpoint, mediaType);
 	}
 	
 	public ToolSettings(LTISource source, String endpoint) {

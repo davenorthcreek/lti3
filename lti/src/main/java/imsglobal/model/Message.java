@@ -40,6 +40,8 @@ public class Message {
  * @var array variables
  */
     public List variables;
+
+
 /**
  * Fixed parameters to accompany message request.
  *
@@ -65,6 +67,55 @@ public class Message {
         this.variables = variables;
         this.constants = constants;
 
+    }
+    
+    public String getType() {
+    	return type;
+    }
+
+
+    public void setType(String type) {
+    	this.type = type;
+    }
+
+
+    public String getPath() {
+    	return path;
+    }
+
+
+    public void setPath(String path) {
+    	this.path = path;
+    }
+
+
+    public List getCapabilities() {
+    	return capabilities;
+    }
+
+
+    public void setCapabilities(List capabilities) {
+    	this.capabilities = capabilities;
+    }
+
+
+    public List getVariables() {
+    	return variables;
+    }
+
+
+    public void setVariables(List variables) {
+    	this.variables = variables;
+    }
+
+
+    public List getConstants() {
+    	return constants;
+    }
+
+
+    public void setConstants(List constants) {
+    	this.constants = constants;
     }
 
 }

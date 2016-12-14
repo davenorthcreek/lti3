@@ -73,48 +73,56 @@ public class Service {
 
     }
 
-public boolean isUnsigned() {
-	return unsigned;
-}
-
-public void setUnsigned(boolean unsigned) {
-	this.unsigned = unsigned;
-}
-
-public String getEndpoint() {
-	return endpoint;
-}
-
-public void setEndpoint(String endpoint) {
-	this.endpoint = endpoint;
-}
-
-public ToolConsumer getConsumer() {
-	return consumer;
-}
-
-public void setConsumer(ToolConsumer consumer) {
-	this.consumer = consumer;
-}
-
-public String getMediaType() {
-	return mediaType;
-}
-
-public void setMediaType(String mediaType) {
-	this.mediaType = mediaType;
-}
-
-/**
- * Send a service request.
- *
- * @param string  method      The action type constant (optional, default is GET)
- * @param array   parameters  Query parameters to add to endpoint (optional, default is none)
- * @param string  body        Body of request (optional, default is null)
- *
- * @return LTIMessage HTTP object containing request and response details
- */
-    public LTIMessage send(String method, Map<String, String> parameters, String body)
+	public boolean isUnsigned() {
+		return unsigned;
+	}
+	
+	public void setUnsigned(boolean unsigned) {
+		this.unsigned = unsigned;
+	}
+	
+	public String getEndpoint() {
+		return endpoint;
+	}
+	
+	public void setEndpoint(String endpoint) {
+		this.endpoint = endpoint;
+	}
+	
+	public ToolConsumer getConsumer() {
+		return consumer;
+	}
+	
+	public void setConsumer(ToolConsumer consumer) {
+		this.consumer = consumer;
+	}
+	
+	public String getMediaType() {
+		return mediaType;
+	}
+	
+	public void setMediaType(String mediaType) {
+		this.mediaType = mediaType;
+	}
+	
+	/**
+	 * Send a service request.
+	 *
+	 * @param string  method      The action type constant (optional, default is GET)
+	 * @param array   parameters  Query parameters to add to endpoint (optional, default is none)
+	 * @param string  body        Body of request (optional, default is null)
+	 *
+	 * @return LTIMessage HTTP object containing request and response details
+	 */
+	
+	public LTIMessage send(String method, String body) {
+		return send(method, null, body);
+	}
+	
+	public LTIMessage send(String method, Map<String, List<String>> parameters) {
+		return send(method, parameters, null);
+	}
+    public LTIMessage send(String method, Map<String, List<String>> parameters, String body)
     {
     	String sep = "";
     	String header = null;
@@ -126,14 +134,15 @@ public void setMediaType(String mediaType) {
                 sep = "&";
             }
             for (String name : parameters.keySet()) {
-            	String value = parameters.get(name);
-            	try {
-            		url += sep + URLEncoder.encode(name, "UTF-8") + "=" + URLEncoder.encode(value, "UTF-8");
-            	} catch (UnsupportedEncodingException unse) {
-            		unse.printStackTrace();
-            		url += sep + name + "=" + value;
+            	for (String value : parameters.get(name)) {
+	            	try {
+	            		url += sep + URLEncoder.encode(name, "UTF-8") + "=" + URLEncoder.encode(value, "UTF-8");
+	            	} catch (UnsupportedEncodingException unse) {
+	            		unse.printStackTrace();
+	            		url += sep + name + "=" + value;
+	            	}
+	            	sep = "&";
             	}
-                sep = "&";
             }
         }
         if (!this.isUnsigned()) {
