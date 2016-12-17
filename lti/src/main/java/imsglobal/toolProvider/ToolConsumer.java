@@ -15,6 +15,7 @@ import org.joda.time.DateTime;
 import org.json.simple.JSONObject;
 
 import imsglobal.LTIMessage;
+import imsglobal.profile.ServiceDefinition;
 import imsglobal.signature.oauth1.OAuthConsumer;
 import imsglobal.signature.oauth1.OAuthException;
 import imsglobal.signature.oauth1.OAuthRequest;
@@ -23,6 +24,8 @@ import imsglobal.signature.oauth1.OAuthSignatureMethod_HMAC_SHA1;
 import imsglobal.signature.oauth1.OAuthUtil;
 import imsglobal.toolProvider.dataConnector.DataConnector;
 import imsglobal.toolProvider.dataConnector.DataConnectorFactory;
+import imsglobal.toolProvider.mediaType.ConsumerProfile;
+import imsglobal.toolProvider.mediaType.ToolService;
 import imsglobal.toolProvider.service.Service;
 import imsglobal.toolProvider.service.ToolSettings;
 
@@ -166,162 +169,169 @@ public class ToolConsumer implements LTISource {
 	 */
 	    private DataConnector dataConnector = null;
 	    
+
+		private List<String> capability_offered = new ArrayList<String>();
+		
+		private Map<String, List<String>> toolProxyMap;
+		
+		private ConsumerProfile profile;
+	    
 	    public String getName() {
-		return name;
-	}
-
-	public void setName(String name) {
-		this.name = name;
-	}
-
-	public String getSecret() {
-		return secret;
-	}
-
-	public void setSecret(String secret) {
-		this.secret = secret;
-	}
-
-	public String getLtiVersion() {
-		return ltiVersion;
-	}
-
-	public void setLtiVersion(String ltiVersion) {
-		this.ltiVersion = ltiVersion;
-	}
-
-	public String getConsumerName() {
-		return consumerName;
-	}
-
-	public void setConsumerName(String consumerName) {
-		this.consumerName = consumerName;
-	}
-
-	public String getConsumerVersion() {
-		return consumerVersion;
-	}
-
-	public void setConsumerVersion(String consumerVersion) {
-		this.consumerVersion = consumerVersion;
-	}
-
-	public String getConsumerGuid() {
-		return consumerGuid;
-	}
-
-	public void setConsumerGuid(String consumerGuid) {
-		this.consumerGuid = consumerGuid;
-	}
-
-	public String getCssPath() {
-		return cssPath;
-	}
-
-	public void setCssPath(String cssPath) {
-		this.cssPath = cssPath;
-	}
-
-	public boolean isThisprotected() {
-		return thisprotected;
-	}
-
-	public void setThisprotected(boolean thisprotected) {
-		this.thisprotected = thisprotected;
-	}
-
-	public boolean isEnabled() {
-		return enabled;
-	}
-
-	public void setEnabled(boolean enabled) {
-		this.enabled = enabled;
-	}
-
-	public DateTime getEnableFrom() {
-		return enableFrom;
-	}
-
-	public void setEnableFrom(DateTime enableFrom) {
-		this.enableFrom = enableFrom;
-	}
-
-	public DateTime getEnableUntil() {
-		return enableUntil;
-	}
-
-	public void setEnableUntil(DateTime enableUntil) {
-		this.enableUntil = enableUntil;
-	}
-
-	public DateTime getLastAccess() {
-		return lastAccess;
-	}
-
-	public void setLastAccess(DateTime lastAccess) {
-		this.lastAccess = lastAccess;
-	}
-
-	public int getIdScope() {
-		return idScope;
-	}
-
-	public void setIdScope(int idScope) {
-		this.idScope = idScope;
-	}
-
-	public String getDefaultEmail() {
-		return defaultEmail;
-	}
-
-	public void setDefaultEmail(String defaultEmail) {
-		this.defaultEmail = defaultEmail;
-	}
-
-	public DateTime getCreated() {
-		return created;
-	}
-
-	public void setCreated(DateTime created) {
-		this.created = created;
-	}
-
-	public DateTime getUpdated() {
-		return updated;
-	}
-
-	public void setUpdated(DateTime updated) {
-		this.updated = updated;
-	}
-
-	public int getId() {
-		return id;
-	}
-
-	public void setId(int id) {
-		this.id = id;
-	}
-
-	public boolean isSettingsChanged() {
-		return settingsChanged;
-	}
-
-	public void setSettingsChanged(boolean settingsChanged) {
-		this.settingsChanged = settingsChanged;
-	}
-
-	public void setKey(String key) {
-		this.key = key;
-	}
+			return name;
+		}
 	
-	public String getKey() {
-		return key;
-	}
-
-	public void setDataConnector(DataConnector dataConnector) {
-		this.dataConnector = dataConnector;
-	}
+		public void setName(String name) {
+			this.name = name;
+		}
 	
+		public String getSecret() {
+			return secret;
+		}
+	
+		public void setSecret(String secret) {
+			this.secret = secret;
+		}
+	
+		public String getLtiVersion() {
+			return ltiVersion;
+		}
+	
+		public void setLtiVersion(String ltiVersion) {
+			this.ltiVersion = ltiVersion;
+		}
+	
+		public String getConsumerName() {
+			return consumerName;
+		}
+	
+		public void setConsumerName(String consumerName) {
+			this.consumerName = consumerName;
+		}
+	
+		public String getConsumerVersion() {
+			return consumerVersion;
+		}
+	
+		public void setConsumerVersion(String consumerVersion) {
+			this.consumerVersion = consumerVersion;
+		}
+	
+		public String getConsumerGuid() {
+			return consumerGuid;
+		}
+	
+		public void setConsumerGuid(String consumerGuid) {
+			this.consumerGuid = consumerGuid;
+		}
+	
+		public String getCssPath() {
+			return cssPath;
+		}
+	
+		public void setCssPath(String cssPath) {
+			this.cssPath = cssPath;
+		}
+	
+		public boolean isThisprotected() {
+			return thisprotected;
+		}
+	
+		public void setThisprotected(boolean thisprotected) {
+			this.thisprotected = thisprotected;
+		}
+	
+		public boolean isEnabled() {
+			return enabled;
+		}
+	
+		public void setEnabled(boolean enabled) {
+			this.enabled = enabled;
+		}
+	
+		public DateTime getEnableFrom() {
+			return enableFrom;
+		}
+	
+		public void setEnableFrom(DateTime enableFrom) {
+			this.enableFrom = enableFrom;
+		}
+	
+		public DateTime getEnableUntil() {
+			return enableUntil;
+		}
+	
+		public void setEnableUntil(DateTime enableUntil) {
+			this.enableUntil = enableUntil;
+		}
+	
+		public DateTime getLastAccess() {
+			return lastAccess;
+		}
+	
+		public void setLastAccess(DateTime lastAccess) {
+			this.lastAccess = lastAccess;
+		}
+	
+		public int getIdScope() {
+			return idScope;
+		}
+	
+		public void setIdScope(int idScope) {
+			this.idScope = idScope;
+		}
+	
+		public String getDefaultEmail() {
+			return defaultEmail;
+		}
+	
+		public void setDefaultEmail(String defaultEmail) {
+			this.defaultEmail = defaultEmail;
+		}
+	
+		public DateTime getCreated() {
+			return created;
+		}
+	
+		public void setCreated(DateTime created) {
+			this.created = created;
+		}
+	
+		public DateTime getUpdated() {
+			return updated;
+		}
+	
+		public void setUpdated(DateTime updated) {
+			this.updated = updated;
+		}
+	
+		public String getId() {
+			return String.valueOf(id);
+		}
+	
+		public void setId(int id) {
+			this.id = id;
+		}
+	
+		public boolean isSettingsChanged() {
+			return settingsChanged;
+		}
+	
+		public void setSettingsChanged(boolean settingsChanged) {
+			this.settingsChanged = settingsChanged;
+		}
+	
+		public void setKey(String key) {
+			this.key = key;
+		}
+		
+		public String getKey() {
+			return key;
+		}
+	
+		public void setDataConnector(DataConnector dataConnector) {
+			this.dataConnector = dataConnector;
+		}
+		
 	/**
 	 * Class constructor.
 	 *
@@ -351,7 +361,7 @@ public class ToolConsumer implements LTISource {
 	        if (key != null) {
 	            load(key, autoEnable);
 	        } else {
-	            setSecret(dataConnector.getRandomString(32));
+	            setSecret(DataConnector.getRandomString(32));
 	        }
 
 	    }
@@ -415,7 +425,7 @@ public class ToolConsumer implements LTISource {
 	    public int getRecordId()
 	    {
 
-	        return getId();
+	        return Integer.valueOf(getId());
 
 	    }
 
@@ -792,14 +802,14 @@ public class ToolConsumer implements LTISource {
 	 * @return HTTPMessage HTTP object containing request and response details
 	 */
 	    public LTIMessage doServiceRequest(
-	    		Service service, 
+	    		ServiceDefinition service, 
 	    		String method, 
 	    		String format, 
 	    		Map<String, List<String>> parameters)
 	    {
 
 	        Map<String, List<String>> params = ToolConsumer.addSignature(
-	        		service.getEndpoint(), 
+	        		service.getEndpoint().toExternalForm(), 
 	        		this.getKey(), 
 	        		this.getSecret(), 
 	        		parameters, 
@@ -807,7 +817,7 @@ public class ToolConsumer implements LTISource {
 	        		format);
 
 	// Connect to tool consumer
-	        LTIMessage http = new LTIMessage(service.getEndpoint(), method, null, null, params);
+	        LTIMessage http = new LTIMessage(service.getEndpoint().toExternalForm(), method, null, null, params);
 	// Parse JSON response
 	        http.send();
 	        String response = http.getResponse();
@@ -830,13 +840,13 @@ public class ToolConsumer implements LTISource {
 		 *
 		 * @return HTTPMessage HTTP object containing request and response details
 		 */
-	    public LTIMessage doServiceRequest(Service service, String method, String format, String data)
+	    public LTIMessage doServiceRequest(ServiceDefinition service, String method, String format, String data)
 	    {
 
-	        String header = ToolConsumer.addSignature(service.getEndpoint(), this.getKey(), this.getSecret(), data, method, format);
+	        String header = ToolConsumer.addSignature(service.getEndpoint().toExternalForm(), this.getKey(), this.getSecret(), data, method, format);
 
 	// Connect to tool consumer
-	        LTIMessage http = new LTIMessage(service.getEndpoint(), method, data, header, null);
+	        LTIMessage http = new LTIMessage(service.getEndpoint().toExternalForm(), method, data, header, null);
 	// Parse JSON response
 	        http.send();
 	        String response = http.getResponse();
@@ -909,5 +919,33 @@ public class ToolConsumer implements LTISource {
 	public DataConnector getDataConnector() {
 		return DataConnectorFactory.getDataConnector();
 	}
+
+	public List<User> getUserResultSourcedIDs(boolean flag, int scope) {
+		return getDataConnector().getUserResultSourcedIDsToolConsumer(this, flag, scope);
+	}
+	
+	public void setCapabilitiesOffered(List<String> capabilities) {
+		this.capability_offered = capabilities;
+	}
+	
+	public List<String> getCapabilitiesOffered() {
+		return capability_offered;
+	}
+
+	public ConsumerProfile getProfile() {
+		//this is the ToolConsumerProfile that comes from JSON-LD
+		return profile;
+	}
+
+	public Map<String, List<String>> getToolProxyMap() {
+		return toolProxyMap;
+	}
+
+	public void setToolProxyMap(Map<String, List<String>> toolProxyMap) {
+		this.toolProxyMap = toolProxyMap;
+	}
+	
+	
+
 
 }

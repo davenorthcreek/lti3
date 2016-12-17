@@ -1,6 +1,7 @@
 package imsglobal.toolProvider;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
@@ -8,6 +9,8 @@ import org.joda.time.DateTime;
 
 import imsglobal.LTIMessage;
 import imsglobal.toolProvider.dataConnector.DataConnector;
+import imsglobal.toolProvider.service.Membership;
+import imsglobal.toolProvider.service.Service;
 import imsglobal.toolProvider.service.ToolSettings;
 
 public class Context implements LTISource {
@@ -397,12 +400,12 @@ public class Context implements LTISource {
 	 *
 	 * @return boolean True if this context supports the Membership service
 	 */
-	    public function hasMembershipService()
+	    public boolean hasMembershipService()
 	    {
 
-	        url = this.getSetting('custom_context_memberships_url');
+	        String url = this.getSetting("custom_context_memberships_url");
 
-	        return !empty(url);
+	        return StringUtils.isNotEmpty(url);
 
 	    }
 
@@ -411,12 +414,12 @@ public class Context implements LTISource {
 	 *
 	 * @return mixed The array of User objects if successful, otherwise false
 	 */
-	    public function getMembership()
+	    public List<User> getMembership()
 	    {
 
-	        url = this.getSetting('custom_context_memberships_url');
-	        service = new Service\Membership(this, url);
-	        response = service.get();
+	        String url = this.getSetting("custom_context_memberships_url");
+	        Membership service = new Membership(this.getConsumer(), url);
+	        List<User> response = service.get();
 
 	        return response;
 
@@ -430,16 +433,20 @@ public class Context implements LTISource {
 	 *
 	 * @return Context    Context object
 	 */
-	    public static function fromRecordId(id, dataConnector)
+	    public static Context fromRecordId(int id, DataConnector dataConnector)
 	    {
 
-	        context = new Context();
-	        context.dataConnector = dataConnector;
+	        Context context = new Context();
+	        context.setDataConnector(dataConnector);
 	        context.load(id);
 
 	        return context;
 
 	    }
+
+	private void setDataConnector(DataConnector dataConnector2) {
+		this.dataConnector = dataConnector2;
+	}
 
 	/**
 	 * Class constructor from consumer.
@@ -455,7 +462,7 @@ public class Context implements LTISource {
 	        context.consumer = consumer;
 	        context.dataConnector = consumer.getDataConnector();
 	        context.ltiContextId = ltiContextId;
-	        if (!empty(ltiContextId)) {
+	        if (StringUtils.isNotEmpty(ltiContextId)) {
 	            context.load();
 	        }
 
@@ -494,6 +501,10 @@ public class Context implements LTISource {
 
 	public void setUpdated(DateTime now) {
 		this.updated = now;
+	}
+
+	public List<User> getUserResultSourcedIDs(boolean flag, int scope) {
+		return getDataConnector().getUserResultSourcedIDsContext(this, flag, scope);
 	}
 
 }

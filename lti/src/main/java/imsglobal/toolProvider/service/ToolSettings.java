@@ -9,6 +9,7 @@ import java.util.Map;
 import org.json.simple.JSONObject;
 
 import imsglobal.LTIMessage;
+import imsglobal.LTIUtil;
 import imsglobal.toolProvider.LTISource;
 import imsglobal.toolProvider.ToolConsumer;
 
@@ -109,9 +110,10 @@ public class ToolSettings extends Service {
 	private void setSource(Object source) {
 		this.source = source;
 	}
-
+	
+	@SuppressWarnings("rawtypes")
 	public Map get() {
-		return get(this.MODE_CURRENT_LEVEL);
+		return get(MODE_CURRENT_LEVEL);
 	}
 	
 	/**
@@ -121,15 +123,16 @@ public class ToolSettings extends Service {
 	 *
 	 * @return mixed The array of settings if successful, otherwise false
 	 */
+	@SuppressWarnings("rawtypes")
 	public Map get(int mode) {
 		JSONObject response = new JSONObject();
-		Map<String, String> parameter = new HashMap<String, String>();
+		Map<String, List<String>> parameter = new HashMap<String, List<String>>();
 		if (mode == MODE_ALL_LEVELS) {
-			parameter.put("bubble", "all");
+			LTIUtil.setParameter(parameter, "bubble", "all");
 		} else if (mode == MODE_DISTINCT_NAMES) {
-			parameter.put("bubble", "distinct");
+			LTIUtil.setParameter(parameter, "bubble", "distinct");
 		}
-	    LTIMessage http = this.send("GET", parameter, null);
+	    LTIMessage http = this.send("GET", parameter);
 	    JSONObject responseJson = http.getResponseJson();
 	    if (!http.isOk()) {
 	    	response = null;
@@ -147,6 +150,7 @@ public class ToolSettings extends Service {
 	    		@SuppressWarnings("unchecked")
 				HashMap<String, Object> hmResponse = new HashMap<String, Object>(response);
 	    		hmResponse.put(theLevel, settings);
+	    		return hmResponse;
 	    	}
 	    }
 	    return response;

@@ -19,6 +19,7 @@ public class LTIMessage {
 	private JSONObject responseJson;
 	private boolean ok;
 	private JSONParser parser;
+	private int status;
 
 	public LTIMessage(String url, String method, String data, String header, Map<String, List<String>> parameters) {
 		setUrl(url);
@@ -116,6 +117,10 @@ public class LTIMessage {
 
 	public void setParams(Map<String, List<String>> params) {
 		this.params = params;
+	}
+
+	public int getStatus() {
+		return status;
 	}
 
 

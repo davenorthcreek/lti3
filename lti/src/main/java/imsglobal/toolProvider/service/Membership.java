@@ -1,9 +1,11 @@
 package imsglobal.toolProvider.service;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import imsglobal.LTIMessage;
 import imsglobal.LTIUtil;
 import imsglobal.toolProvider.LTISource;
 import imsglobal.toolProvider.ResourceLink;
@@ -37,10 +39,17 @@ public class Membership extends Service {
 	 */
 	    public Membership(LTISource source, String endpoint)
 	    {
-	    	super(source.getConsumer(), endpoint, "application/vnd.ims.lis.v2.membershipcontainer+json");
-	        this.source = source;
+	    	this.setConsumer(source.getConsumer());
+	    	this.setEndpoint(endpoint);
+	    	this.setMediaType("application/vnd.ims.lis.v2.membershipcontainer+json");
+	        this.setSource(source);
 
 	    }
+
+	private void setSource(LTISource source2) {
+		this.source = source2;
+		
+	}
 
 	/**
 	 * Get the memberships.
@@ -73,45 +82,48 @@ public class Membership extends Service {
 	        }
 	        LTIMessage http = this.send("GET", parameters);
 	        List<User> users = null;
-	        if (!http.ok) {
+	        if (!http.isOk()) {
 	            //still null
 	        } else {
-	            List<User> users = new List<User>();
+	            users = new ArrayList<User>();
+	            List<User> oldUserIds = new ArrayList<User>();
 	            if (isLink) {
-	                List<String> oldUserIds = this.source.getUserResultSourcedIDs(true, ToolProvider.ID_SCOPE_RESOURCE);
+	                oldUserIds = this.source.getUserResultSourcedIDs(true, ToolProvider.ID_SCOPE_RESOURCE);
 	            }
-	            for (User membership : http.getMembership()) {
+	            Map<String, Map<String, String>> membership = getMembership(http);
+	            for (String id : membership.keySet()) {
+	            	Map<String, String> member = membership.get(id);
 	            //foreach (http.responseJson.pageOf.membershipSubject.membership as membership) {
 	            	User user = new User();
-	                member = membership.member;
+	                //User member = membership.get("member");
 	                if (isLink) {
-	                    user = User.fromResourceLink(this.source, member.userId);
+	                    user = User.fromResourceLink(this.source, member.get("userId"));
 	                } else {
-	                    user.setLtiUserId(member.userId);
+	                    user.setLtiUserId(member.get("userId"));
 	                }
 
 	// Set the user name
-	                String firstname = (isset(member.givenName)) ? member.givenName : "";
-	                String lastname = (isset(member.familyName)) ? member.familyName : "";
-	                String fullname = (isset(member.name)) ? member.name : "";
+	                String firstname = (member.containsKey("givenName")) ? member.get("givenName") : "";
+	                String lastname = (member.containsKey("familyName")) ? member.get("lastName") : "";
+	                String fullname = (member.containsKey("name")) ? member.get("fullName") : "";
 	                user.setNames(firstname, lastname, fullname);
 
 	// Set the user email
-	                String email = (isset(member.email)) ? member.email : "";
+	                String email = (member.containsKey("email")) ? member.get("email") : "";
 	                user.setEmail(email, this.source.getConsumer().defaultEmail);
 
 	// Set the user roles
-	                if (isset(membership.role)) {
-	                    user.setRoles(ToolProvider.parseRoles(membership.role));
+	                if (member.containsKey("role")) {
+	                	user.setRoles(ToolProvider.parseRoles(member.get("role")));
 	                }
 
 	// If a result sourcedid is provided save the user
 	                if (isLink) {
-	                    if (isset(member.message)) {
-	                        foreach (member.message as message) {
-	                            if (isset(message.message_type) && (message.message_type === 'basic-lti-launch-request')) {
-	                                if (isset(message.lis_result_sourcedid)) {
-	                                    user.ltiResultSourcedId = message.lis_result_sourcedid;
+	                    if (member.containsKey("message")) {
+	                    	for (Map<String, String> message : parseMessages(member.get("message"))) {
+	                            if (message.containsKey("message_type") && (message.get("message_type") == "basic-lti-launch-request")) {
+	                                if (message.containsKey("lis_result_sourcedid")) {
+	                                    user.setLtiResultSourcedId(message.get("lis_result_sourcedid"));
 	                                    user.save();
 	                                }
 	                                break;                                
@@ -119,18 +131,18 @@ public class Membership extends Service {
 	                        }
 	                    }
 	                }
-	                users[] = user;
+	                users.add(user);
 
 	// Remove old user (if it exists)
 	                if (isLink) {
-	                    unset(oldUsers[user.getId(ToolProvider\ToolProvider::ID_SCOPE_RESOURCE)]);
+	                	oldUserIds.remove(user.getId(ToolProvider.ID_SCOPE_RESOURCE));
 	                }
 	            }
 
 	// Delete any old users which were not in the latest list from the tool consumer
 	            if (isLink) {
-	                foreach (oldUsers as id => user) {
-	                    user.delete();
+	                for (User userToDelete : oldUserIds) {
+	                    userToDelete.delete();
 	                }
 	            }
 	        }
@@ -138,4 +150,13 @@ public class Membership extends Service {
 	        return users;
 
 	    }
+
+		private List<Map<String, String>> parseMessages(String string) {
+			// TODO take JSON string, turn into list of messages and message IDs
+			return null;
+		}
+
+		private Map<String, Map<String, String>> getMembership(LTIMessage http) {
+			return new HashMap<String, Map<String, String>>();
+		}
 }

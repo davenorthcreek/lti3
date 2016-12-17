@@ -367,7 +367,7 @@ public class DataConnector {
 	    }
 
 	/**
-	 * Get array of user objects.
+	 * Get List of user objects.
 	 *
 	 * Obtain an array of User objects for users with a result sourcedId.  The array may include users from other
 	 * resource links which are sharing this resource link.  It may also be optionally indexed by the user ID of a specified scope.
@@ -385,6 +385,45 @@ public class DataConnector {
 
 	    }
 
+	/**
+	 * Get List of user objects.
+	 *
+	 * Obtain an array of User objects for users with a result sourcedId.  The array may include users from other
+	 * Contexts(?).  It may also be optionally indexed by the user ID of a specified scope.
+	 *
+	 * @param Context 	  context      	Context object
+	 * @param boolean     localOnly 	True if only users within the context are to be returned (excluding users sharing this context)
+	 * @param int         idScope     	Scope value to use for user IDs
+	 *
+	 * @return List List of User objects
+	 */
+	    public List<User> getUserResultSourcedIDsContext(Context context, boolean localOnly, int ID_SCOPE)
+	    {
+
+	        return new ArrayList<User>();
+
+	    }
+
+		    
+	/**
+	 * Get List of user objects.
+	 *
+	 * Obtain an array of User objects for users with a result sourcedId.  It may also be optionally indexed by the user ID of a specified scope.
+	 *
+	 * @param ToolConsumer consumer 	    ToolConsumer object
+	 * @param boolean      localOnly 		True if only users within the consumer are to be returned (excluding users sharing this resource link)
+	 * @param int          idScope     		Scope value to use for user IDs
+	 *
+	 * @return array Array of User objects
+	 */
+	    public List<User> getUserResultSourcedIDsToolConsumer(ToolConsumer consumer, boolean localOnly, int ID_SCOPE)
+	    {
+
+	        return new ArrayList<User>();
+
+	    }
+
+	    
 	/**
 	 * Get array of shares defined for this resource link.
 	 *
@@ -595,6 +634,7 @@ public class DataConnector {
 	        return value;
 
 	    }
+
 
 	/**
 	 * Quote a string for use in a database query.
