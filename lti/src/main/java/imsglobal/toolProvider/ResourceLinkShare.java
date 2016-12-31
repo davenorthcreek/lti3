@@ -43,4 +43,37 @@ public class ResourceLinkShare {
 	    {
 	    }
 
+	public String getConsumerKey() {
+		return consumerKey;
+	}
+
+	public void setConsumerKey(String consumerKey) {
+		this.consumerKey = consumerKey;
+	}
+
+	public String getResourceLinkId() {
+		return resourceLinkId;
+	}
+
+	public void setResourceLinkId(String resourceLinkId) {
+		this.resourceLinkId = resourceLinkId;
+	}
+
+	public String getTitle() {
+		return title;
+	}
+
+	public void setTitle(String title) {
+		this.title = title;
+	}
+
+	public boolean isApproved() {
+		return approved;
+	}
+
+	public void setApproved(boolean approved) {
+		this.approved = approved;
+	}
+	
+
 }

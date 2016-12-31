@@ -1663,6 +1663,13 @@ public class ResourceLink implements LTISource {
 
 	  }
 
+	public void setSettingsMap(Map<String, String> settings2) {
+		for (String key : settings2.keySet()) {
+			LTIUtil.setParameter(settings, key, settings2.get(key));
+		}
+		
+	}
+
                 
 
 

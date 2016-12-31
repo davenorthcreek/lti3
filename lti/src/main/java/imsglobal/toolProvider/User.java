@@ -27,6 +27,30 @@ public class User {
 		
 	}
 
+	public DateTime getCreated() {
+		return created;
+	}
+
+	public DateTime getUpdated() {
+		return updated;
+	}
+
+	public int getResourceLinkId() {
+		return resourceLinkId;
+	}
+
+	public String getLtiUserId() {
+		return ltiUserId;
+	}
+
+	public void setResourceLink(ResourceLink resourceLink) {
+		this.resourceLink = resourceLink;
+	}
+
+	public void setDataConnector(DataConnector dataConnector) {
+		this.dataConnector = dataConnector;
+	}
+
 	/**
 	 * Set the user's roles to those specified in the list provided.
 	 *

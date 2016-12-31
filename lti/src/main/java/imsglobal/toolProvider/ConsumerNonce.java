@@ -106,4 +106,22 @@ public class ConsumerNonce {
 
 	    }
 
+	public DateTime getExpires() {
+		return expires;
+	}
+
+	public void setExpires(DateTime expires) {
+		this.expires = expires;
+	}
+
+	public void setConsumer(ToolConsumer consumer) {
+		this.consumer = consumer;
+	}
+
+	public void setValue(String value) {
+		this.value = value;
+	}
+	    
+	
+
 }

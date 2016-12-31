@@ -73,7 +73,7 @@ public class DataConnector {
 	 *
 	 * @var string $dbTableNamePrefix
 	 */
-	    protected String dbTableNamePrefix = "";
+	    protected String prefix = "";
 	/**
 	 * SQL date format (default = "Y-m-d")
 	 *
@@ -96,10 +96,10 @@ public class DataConnector {
 	 * @param object $db                 Database connection object
 	 * @param string $dbTableNamePrefix  Prefix for database table names (optional, default is none)
 	 */
-	    public DataConnector(Object db, String dbTableNamePrefix)
+	    public DataConnector(Object db, String prefix)
 	    {
 	    	setDb(db);
-	    	setDbTableNamePrefix(dbTableNamePrefix);
+	    	setDbTableNamePrefix(prefix);
 
 	    }
 
@@ -116,11 +116,11 @@ public class DataConnector {
 	}
 
 	public String getDbTableNamePrefix() {
-		return dbTableNamePrefix;
+		return prefix;
 	}
 
 	public void setDbTableNamePrefix(String dbTableNamePrefix) {
-		this.dbTableNamePrefix = dbTableNamePrefix;
+		this.prefix = dbTableNamePrefix;
 	}
 
 	public String getDateFormat() {
