@@ -1,8 +1,11 @@
 package imsglobal.toolProvider.mediaType;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+import imsglobal.LTIUtil;
 import imsglobal.profile.ServiceDefinition;
 import imsglobal.toolProvider.ToolProvider;
 
@@ -124,6 +127,17 @@ public class ToolProxy {
 		this.securityContract = securityContract;
 	}
 	    
-	    
+	public Map<String, List<String>> toMap() {
+		Map<String, List<String>> ret = new HashMap<String, List<String>>();
+		LTIUtil.setParameter(ret, "lti_version", getLti_version());
+		LTIUtil.setParameter(ret, "toolConsumerProfileId", getToolConsumerProfileId());
+		LTIUtil.setParameter(ret, "type", getType());
+		LTIUtil.setParameter(ret, "id", getId());
+		LTIUtil.setParameter(ret, "toolProfile", getToolProfile().toString());
+		LTIUtil.setParameter(ret, "securityContract", getSecurityContract().toString());
+		ret.put("contexts", getContexts());
+		
+		return ret;
+	}
 
 }

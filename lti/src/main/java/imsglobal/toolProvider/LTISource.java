@@ -1,11 +1,11 @@
 package imsglobal.toolProvider;
 
-import java.util.List;
+import java.util.Map;
 
 public interface LTISource {
 	public ToolConsumer getConsumer();
 	
-	public List<User> getUserResultSourcedIDs(boolean flag, int scope);
+	public Map<String, User> getUserResultSourcedIDs(boolean flag, int scope);
 
 	public String getId();
 }

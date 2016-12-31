@@ -1,5 +1,10 @@
 package imsglobal.toolProvider;
 
+import org.joda.time.Duration;
+import org.joda.time.DateTime;
+
+import imsglobal.toolProvider.dataConnector.DataConnector;
+
 public class ResourceLinkShareKey {
 	/**
 	 * Class to represent a tool consumer resource link share key
@@ -10,99 +15,107 @@ public class ResourceLinkShareKey {
 	 * @version 3.0.2
 	 * @license http://www.apache.org/licenses/LICENSE-2.0 Apache License, Version 2.0
 	 */
-	class ResourceLinkShareKey
-	{
+
 
 	/**
 	 * Maximum permitted life for a share key value.
 	 */
-	    const MAX_SHARE_KEY_LIFE = 168;  // in hours (1 week)
+	    public static final int MAX_SHARE_KEY_LIFE = 168;  // in hours (1 week)
 	/**
 	 * Default life for a share key value.
 	 */
-	    const DEFAULT_SHARE_KEY_LIFE = 24;  // in hours
+	    public static final int DEFAULT_SHARE_KEY_LIFE = 24;  // in hours
 	/**
 	 * Minimum length for a share key value.
 	 */
-	    const MIN_SHARE_KEY_LENGTH = 5;
+	    public static final int MIN_SHARE_KEY_LENGTH = 5;
 	/**
 	 * Maximum length for a share key value.
 	 */
-	    const MAX_SHARE_KEY_LENGTH = 32;
+	    public static final int MAX_SHARE_KEY_LENGTH = 32;
 
+	    
+    /**
+     * Consumer key for resource link being shared.
+     */
+      private String primaryConsumerKey = null;
+      
 	/**
 	 * ID for resource link being shared.
 	 *
-	 * @var string $resourceLinkId
+	 * @var string resourceLinkId
 	 */
-	    public $resourceLinkId = null;
+	    private String resourceLinkId = null;
 	/**
 	 * Length of share key.
 	 *
-	 * @var int $length
+	 * @var int length
 	 */
-	    public $length = null;
+	    private int length;
 	/**
 	 * Life of share key.
 	 *
-	 * @var int $life
+	 * @var int life
 	 */
-	    public $life = null;  // in hours
+	    private long life;  // in hours
 	/**
 	 * Whether the sharing arrangement should be automatically approved when first used.
 	 *
-	 * @var boolean $autoApprove
+	 * @var boolean autoApprove
 	 */
-	    public $autoApprove = false;
+	    private boolean autoApprove = false;
 	/**
 	 * Date/time when the share key expires.
 	 *
-	 * @var int $expires
+	 * @var int expires
 	 */
-	    public $expires = null;
+	    public DateTime expires = null;
 
 	/**
 	 * Share key value.
 	 *
-	 * @var string $id
+	 * @var string id
 	 */
-	    private $id = null;
+	    private String id = null;
 	/**
 	 * Data connector.
 	 *
-	 * @var DataConnector $dataConnector
+	 * @var DataConnector dataConnector
 	 */
-	    private $dataConnector = null;
+	    private DataConnector dataConnector = null;
 
 	/**
 	 * Class constructor.
 	 *
-	 * @param ResourceLink $resourceLink  Resource_Link object
-	 * @param string       $id      Value of share key (optional, default is null)
+	 * @param ResourceLink resourceLink  Resource_Link object
+	 * @param string       id      Value of share key (optional, default is null)
 	 */
-	    public function __construct($resourceLink, $id = null)
+	    
+	    public ResourceLinkShareKey(ResourceLink resourceLink) {
+	    	this.initialize();
+	        this.dataConnector = resourceLink.getDataConnector();
+	        this.resourceLinkId = String.valueOf(resourceLink.getRecordId());
+	    }
+	    
+	    public ResourceLinkShareKey(ResourceLink resourceLink, String id)
 	    {
 
-	        $this->initialize();
-	        $this->dataConnector = $resourceLink->getDataConnector();
-	        $this->resourceLinkId = $resourceLink->getRecordId();
-	        $this->id = $id;
-	        if (!empty($id)) {
-	            $this->load();
-	        }
+	        this.initialize();
+	        this.dataConnector = resourceLink.getDataConnector();
+	        this.resourceLinkId = String.valueOf(resourceLink.getRecordId());
+	        this.id = id;
+	        this.load();
 
 	    }
 
 	/**
 	 * Initialise the resource link share key.
 	 */
-	    public function initialize()
+	    public void initialize()
 	    {
 
-	        $this->length = null;
-	        $this->life = null;
-	        $this->autoApprove = false;
-	        $this->expires = null;
+	        this.autoApprove = false;
+	        this.expires = null;
 
 	    }
 
@@ -111,10 +124,10 @@ public class ResourceLinkShareKey {
 	 *
 	 * Pseudonym for initialize().
 	 */
-	    public function initialise()
+	    public void initialise()
 	    {
 
-	        $this->initialize();
+	        this.initialize();
 
 	    }
 
@@ -123,25 +136,25 @@ public class ResourceLinkShareKey {
 	 *
 	 * @return boolean True if the share key was successfully saved
 	 */
-	    public function save()
+	    public boolean save()
 	    {
 
-	        if (empty($this->life)) {
-	            $this->life = self::DEFAULT_SHARE_KEY_LIFE;
+	        if (life == 0) {
+	            life = DEFAULT_SHARE_KEY_LIFE;
 	        } else {
-	            $this->life = max(min($this->life, self::MAX_SHARE_KEY_LIFE), 0);
+	            life = Math.max(Math.min(life, MAX_SHARE_KEY_LIFE), 0);
 	        }
-	        $this->expires = time() + ($this->life * 60 * 60);
-	        if (empty($this->id)) {
-	            if (empty($this->length) || !is_numeric($this->length)) {
-	                $this->length = self::MAX_SHARE_KEY_LENGTH;
+	        this.expires = DateTime.now().plusHours((int) life);
+	        if (id == null) {
+	            if (length == 0) {
+	                this.length = MAX_SHARE_KEY_LENGTH;
 	            } else {
-	                $this->length = max(min($this->length, self::MAX_SHARE_KEY_LENGTH), self::MIN_SHARE_KEY_LENGTH);
+	                this.length = Math.max(Math.min(length, MAX_SHARE_KEY_LENGTH), MIN_SHARE_KEY_LENGTH);
 	            }
-	            $this->id = DataConnector::getRandomString($this->length);
+	            this.id = DataConnector.getRandomString(length);
 	        }
 
-	        return $this->dataConnector->saveResourceLinkShareKey($this);
+	        return this.dataConnector.saveResourceLinkShareKey(this);
 
 	    }
 
@@ -150,10 +163,10 @@ public class ResourceLinkShareKey {
 	 *
 	 * @return boolean True if the share key was successfully deleted
 	 */
-	    public function delete()
+	    public boolean delete()
 	    {
 
-	        return $this->dataConnector->deleteResourceLinkShareKey($this);
+	        return this.dataConnector.deleteResourceLinkShareKey(this);
 
 	    }
 
@@ -162,10 +175,10 @@ public class ResourceLinkShareKey {
 	 *
 	 * @return string Share key value
 	 */
-	    public function getId()
+	    public String getId()
 	    {
 
-	        return $this->id;
+	        return this.id;
 
 	    }
 
@@ -176,18 +189,81 @@ public class ResourceLinkShareKey {
 	/**
 	 * Load the resource link share key from the database.
 	 */
-	    private function load()
+	    private void load()
 	    {
 
-	        $this->initialize();
-	        $this->dataConnector->loadResourceLinkShareKey($this);
-	        if (!is_null($this->id)) {
-	            $this->length = strlen($this->id);
+	        initialize();
+	        dataConnector.loadResourceLinkShareKey(this);
+	        if (id != null) {
+	            length = String.valueOf(id).length();
 	        }
-	        if (!is_null($this->expires)) {
-	            $this->life = ($this->expires - time()) / 60 / 60;
+	        if (expires != null) {
+	        	Duration duration = new Duration(expires, DateTime.now());
+	        	life = duration.getStandardHours();
 	        }
 
 	    }
+
+	public String getResourceLinkId() {
+		return resourceLinkId;
+	}
+
+	public void setResourceLinkId(String resourceLinkId) {
+		this.resourceLinkId = resourceLinkId;
+	}
+
+	public int getLength() {
+		return length;
+	}
+
+	public void setLength(int length) {
+		this.length = length;
+	}
+
+	public long getLife() {
+		return life;
+	}
+
+	public void setLife(int life) {
+		this.life = life;
+	}
+
+	public boolean isAutoApprove() {
+		return autoApprove;
+	}
+
+	public void setAutoApprove(boolean autoApprove) {
+		this.autoApprove = autoApprove;
+	}
+
+	public DateTime getExpires() {
+		return expires;
+	}
+
+	public void setExpires(DateTime expires) {
+		this.expires = expires;
+	}
+
+	public DataConnector getDataConnector() {
+		return dataConnector;
+	}
+
+	public void setDataConnector(DataConnector dataConnector) {
+		this.dataConnector = dataConnector;
+	}
+
+	public void setId(String id) {
+		this.id = id;
+	}
+
+	public String getPrimaryConsumerKey() {
+		return primaryConsumerKey;
+	}
+
+	public void setPrimaryConsumerKey(String primaryConsumerKey) {
+		this.primaryConsumerKey = primaryConsumerKey;
+	}
+	    
+	
 
 }

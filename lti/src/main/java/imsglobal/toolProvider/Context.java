@@ -71,9 +71,9 @@ public class Context implements LTISource {
 	/**
 	 * ID for this context.
 	 *
-	 * @var int id
+	 * @var String id
 	 */
-	    private Integer id = null;
+	    private String id = null;
 	/**
 	 * Whether the settings value have changed since last saved.
 	 *
@@ -208,7 +208,7 @@ public class Context implements LTISource {
 	 *
 	 * @return int Context record ID value
 	 */
-	    public Integer getRecordId()
+	    public String getRecordId()
 	    {
 
 	        return this.id;
@@ -220,7 +220,7 @@ public class Context implements LTISource {
 	 *
 	 * @return int id  Context record ID value
 	 */
-	    public void setRecordId(Integer id)
+	    public void setRecordId(String id)
 	    {
 
 	        this.id = id;
@@ -433,7 +433,7 @@ public class Context implements LTISource {
 	 *
 	 * @return Context    Context object
 	 */
-	    public static Context fromRecordId(int id, DataConnector dataConnector)
+	    public static Context fromRecordId(String id, DataConnector dataConnector)
 	    {
 
 	        Context context = new Context();
@@ -481,7 +481,7 @@ public class Context implements LTISource {
 	 *
 	 * @return boolean True if context was successfully loaded
 	 */
-    private boolean load(int id)
+    private boolean load(String id)
     {
 
         this.initialize();
@@ -503,7 +503,7 @@ public class Context implements LTISource {
 		this.updated = now;
 	}
 
-	public List<User> getUserResultSourcedIDs(boolean flag, int scope) {
+	public Map<String, User> getUserResultSourcedIDs(boolean flag, int scope) {
 		return getDataConnector().getUserResultSourcedIDsContext(this, flag, scope);
 	}
 

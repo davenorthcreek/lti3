@@ -14,32 +14,32 @@ public class ResourceLinkShare {
 	/**
 	 * Consumer key value.
 	 *
-	 * @var string $consumerKey
+	 * @var string consumerKey
 	 */
-	    public $consumerKey = null;
+	    public String consumerKey = null;
 	/**
 	 * Resource link ID value.
 	 *
-	 * @var string $resourceLinkId
+	 * @var string resourceLinkId
 	 */
-	    public $resourceLinkId = null;
+	    public String resourceLinkId = null;
 	/**
 	 * Title of sharing context.
 	 *
-	 * @var string $title
+	 * @var string title
 	 */
-	    public $title = null;
+	    public String title = null;
 	/**
 	 * Whether sharing request is to be automatically approved on first use.
 	 *
-	 * @var boolean $approved
+	 * @var boolean approved
 	 */
-	    public $approved = null;
+	    public boolean approved;
 
 	/**
 	 * Class constructor.
 	 */
-	    public function __construct()
+	    public ResourceLinkShare()
 	    {
 	    }
 

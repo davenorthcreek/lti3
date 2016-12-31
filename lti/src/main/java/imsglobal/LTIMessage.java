@@ -15,13 +15,30 @@ public class LTIMessage {
 	private String body;
 	private String header;
 	private Map<String, List<String>> params;
+	private String request;
 	private String response;
 	private JSONObject responseJson;
 	private boolean ok;
 	private JSONParser parser;
 	private int status;
+	private Map<String, String> responseHeaders;
+	public Map<String, String> getRequestHeaders() {
+		return requestHeaders;
+	}
 
-	public LTIMessage(String url, String method, String data, String header, Map<String, List<String>> parameters) {
+
+	public void setRequestHeaders(Map<String, String> requestHeaders) {
+		this.requestHeaders = requestHeaders;
+	}
+
+
+	private Map<String, String> requestHeaders;
+
+	public LTIMessage(String url, 
+			String method, 
+			String data, 
+			String header, 
+			Map<String, List<String>> parameters) {
 		setUrl(url);
 		setMethod(method);
 		setBody(data);
@@ -29,6 +46,18 @@ public class LTIMessage {
 		setParams(parameters);
 		JSONParser parser = new JSONParser();
 	}
+	
+	
+	public LTIMessage(String url, 
+			String method,
+			Map<String, List<String>> parameters) {
+		setUrl(url);
+		setMethod(method);
+		setParams(parameters);
+		JSONParser parser = new JSONParser();
+	}
+	
+	
 
 	public String getUrl() {
 		return url;
@@ -81,6 +110,14 @@ public class LTIMessage {
 		return false;
 		
 	}
+	
+	public void setRequest(String request) {
+		this.request = request;
+	}
+	
+	public String getRequest() {
+		return request;
+	}
 
 	public String getResponse() {
 		return response;
@@ -121,6 +158,16 @@ public class LTIMessage {
 
 	public int getStatus() {
 		return status;
+	}
+
+
+	public Map<String, String> getResponseHeaders() {
+		return responseHeaders;
+	}
+
+
+	public void setResponseHeaders(Map<String, String> responseHeaders) {
+		this.responseHeaders = responseHeaders;
 	}
 
 

@@ -7,6 +7,7 @@ import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
 
+import imsglobal.profile.ServiceDefinition;
 import imsglobal.toolProvider.Context;
 import imsglobal.toolProvider.ToolProvider;
 
@@ -47,7 +48,7 @@ public class SecurityContract {
         toolServices = new HashMap<String, ToolService>();
         for (ToolService requiredService : toolProvider.getRequiredServices()) {
             for (String format : requiredService.getFormats()) {
-                ToolService service = toolProvider.findService(format, requiredService.getActions());
+                ServiceDefinition service = toolProvider.findService(format, requiredService.getActions());
                 if ((service != null) && toolServices.containsKey(service.getId())) {
                     String id = service.getId();
                     String part1 = StringUtils.substringBefore(id, ":");
@@ -67,7 +68,7 @@ public class SecurityContract {
         }
         for (ToolService optionalService : toolProvider.getOptionalServices()) {
             for (String format : optionalService.getFormats()) {
-                ToolService service = toolProvider.findService(format, optionalService.getActions());
+                ServiceDefinition service = toolProvider.findService(format, optionalService.getActions());
                 if ((service != null) && toolServices.containsKey(service.getId())) {
                     String id = service.getId();
                     String part1 = StringUtils.substringBefore(id, ":");

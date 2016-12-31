@@ -1,29 +1,41 @@
 package imsglobal.toolProvider;
 
+import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
 import org.apache.commons.lang3.StringEscapeUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.http.HttpRequest;
-
-import com.github.scribejava.core.builder.api.BaseApi;
-import com.github.scribejava.core.oauth.OAuth10aService;
+import org.joda.time.DateTime;
 
 import imsglobal.LTIMessage;
 import imsglobal.product.Product;
 import imsglobal.product.ProductFamily;
-import imsglobal.profile.Item;
 import imsglobal.profile.ProfileResourceHandler;
 import imsglobal.profile.ServiceDefinition;
+
 import imsglobal.toolProvider.dataConnector.DataConnector;
-import imsglobal.toolProvider.mediaType.ToolService;
 import imsglobal.toolProvider.mediaType.ToolProxy;
+import imsglobal.toolProvider.mediaType.ToolService;
+import net.oauth.OAuthAccessor;
+import net.oauth.OAuthConsumer;
+import net.oauth.OAuthMessage;
+import net.oauth.OAuthValidator;
+import net.oauth.SimpleOAuthValidator;
+import net.oauth.server.OAuthServlet;
 
 public class ToolProvider {
 	
@@ -193,7 +205,7 @@ public class ToolProvider {
 	/**
 	 * Return URL provided by tool consumer.
 	 *
-	 * @var string returnUrl
+	 * @var URL returnUrl
 	 */
 	    private URL returnUrl = null;
 	/**
@@ -330,53 +342,84 @@ public class ToolProvider {
 	 * @var boolean debugMode
 	 */
 	    private boolean debugMode = false;
+	    
+    /**
+     *  URL to redirect user to if the request is not successful.
+     */
+      private String error = null;
 
 	/**
 	 * Callback functions for handling requests.
 	 *
 	 * @var array callbackHandler
 	 */
-	    private Map<String, CallBack> callbackHandler = new HashMap<String, Callback>();
+	    private Map<String, Callback> callbackHandlers = new HashMap<String, Callback>();
 	/**
 	 * LTI parameter constraints for auto validation checks.
 	 *
 	 * @var array constraints
 	 */
-	    private Map<String, Map<String, String>> constraints = new HashMap<String, Map<String, String>>();
+	    private Map<String, ParameterConstraint> constraints = new HashMap<String, ParameterConstraint>();
 	    
 	    private String messageType;
 	    private String ltiVersion;
 
+	    
+	    private HttpServletRequest request;
+	    private HttpServletResponse response;
+
+	    
+	    /*  Probably not needed
+	    private JSONObject requestParamsToJSON(HttpRequest req) {
+      	  JSONObject jsonObj = new JSONObject();
+      	  Map<String,String[]> params = req.getParameterMap();
+      	  for (Map.Entry<String,String[]> entry : params.entrySet()) {
+      	    String v[] = entry.getValue();
+      	    Object o = (v.length == 1) ? v[0] : v;
+      	    jsonObj.put(entry.getKey(), o);
+      	  }
+      	  return jsonObj;
+      	}
+      	*/
+      	
 	/**
 	 * Class constructor
 	 *
 	 * @param DataConnector     dataConnector    Object containing a database connection object
 	 */
-	    public ToolProvider(DataConnector dataConnector, HttpRequest request)
+	    public ToolProvider(DataConnector dataConnector, HttpServletRequest request, HttpServletResponse response)
 	    {
-	        dataConnector = dataConnector;
-	        ok = (this.dataConnector != null);
+	        this.dataConnector = dataConnector;
+	        ok = (dataConnector != null);
+	        this.request = request;
+	        this.response = response;
+	        //JSONObject reqJSON = requestParamsToJSON(request);
 
 	// Set debug mode
-	        String customDebug = request.getParams().getParameter("custom_debug").toString();
+	        String customDebug = request.getParameter("custom_debug");
 	        if(StringUtils.isNotEmpty(customDebug) && StringUtils.equalsIgnoreCase(customDebug, "true")) {
 	        	setDebugMode(true);
 	        }
 
 	// Set return URL if available
-	        String returnUrl = request.getParams().getParameter("launch_presentation_return_url").toString();
-	        if (StringUtils.isNotEmpty(returnUrl)) {
-	            setReturnUrl(new URL(returnUrl));
-	        } else {
-	        	returnUrl = request.getParams().getParameter("content_item_return_url").toString();
-	        	if (StringUtils.isNotEmpty(returnUrl)) {
-	        		setReturnUrl(new URL(returnUrl));
-	        	}
-	        }
-	        setMessageType(request.getParams().getParameter("lti_message_type").toString());
-	        setLTIVersion(request.getParams().getParameter("lti_version").toString());
-	        this.vendor = new ProductFamily();
-	        this.product = new Product();
+            try {
+		        String tryreturnUrl = request.getParameter("launch_presentation_return_url");
+		        if (StringUtils.isNotEmpty(tryreturnUrl)) {
+					setReturnUrl(new URL(tryreturnUrl));
+		        } else {
+		        	tryreturnUrl = request.getParameter("content_item_return_url");
+		        	if (StringUtils.isNotEmpty(tryreturnUrl)) {
+		        		setReturnUrl(new URL(tryreturnUrl));
+		        	}
+		        }
+			} catch (MalformedURLException e) {
+				e.printStackTrace();
+			}
+
+	        setMessageType(request.getParameter("lti_message_type"));
+	        setLTIVersion(request.getParameter("lti_version"));
+	        vendor = new ProductFamily();
+	        product = new Product();
 
 	    }
 
@@ -421,12 +464,11 @@ public class ToolProvider {
 
 	        name = StringUtils.trim(name);
 	        if (name.length() > 0) {
-	        	Map<String, String> constraint = new HashMap<String, String>();
-	        	constraint.put("required", String.valueOf(required));
-	        	constraint.put("max_length", String.valueOf(maxLength));
-	        	String messages = StringUtils.join(messageTypes, ", ");
-	        	constraint.put("messages", messages);
-	        	constraints.put(name, constraint);
+	        	ParameterConstraint pc = new ParameterConstraint(required, maxLength);
+	        	Set<String> types = new HashSet<String>();
+	        	Collections.addAll(types, messageTypes);
+	        	pc.setMessageTypes(types);
+	        	constraints.put(name, pc);
 	        }
 
 	    }
@@ -494,7 +536,7 @@ public class ToolProvider {
 	        String secret = DataConnector.getRandomString(12);
 	        ToolProxy toolProxy = new ToolProxy(this, toolProxyService, secret);
 	        Map<String, List<String>> proxyMap = toolProxy.toMap();
-	        LTIMessage http = this.consumer.doServiceRequest(
+	        LTIMessage http = consumer.doServiceRequest(
 	        		toolProxyService, 
 	        		"POST", 
 	        		"application/vnd.ims.lti.v2.toolproxy+json", 
@@ -519,7 +561,7 @@ public class ToolProvider {
 	 * @return array Array of roles
 	 */
 	    public static List<String> parseRoles(String roles) {
-	    	List roleList = new ArrayList<String>();
+	    	List<String> roleList = new ArrayList<String>();
 	    	for (String r : StringUtils.split(roles, ",")) {
 	    		roleList.add(r);
 	    	}
@@ -550,7 +592,7 @@ public class ToolProvider {
 	 * @param string target Name of target (optional)
 	 * @return string
 	 */
-	    public static String sendForm(String errorUrl, Map<String, List<String>> formParams) {
+	    public static String sendForm(URL errorUrl, Map<String, List<String>> formParams) {
 	    	return sendForm(errorUrl, formParams, "");
 	    }
 	    
@@ -577,7 +619,7 @@ public class ToolProvider {
 	        	for (String value : params.get(key)) {
 		        	String key2 = StringEscapeUtils.escapeHtml4(key);
 		        	String value2 = StringEscapeUtils.escapeHtml4(value);
-		        	page += "<input type=\"hidden\" name=\"" + key + "\" value=\"" + value + "\" />\n\n";
+		        	page += "<input type=\"hidden\" name=\"" + key2 + "\" value=\"" + value2 + "\" />\n\n";
 	        	}
 
 	        }
@@ -602,7 +644,7 @@ public class ToolProvider {
 	    protected boolean onLaunch()
 	    {
 
-	        this.onError();
+	        return onError();
 
 	    }
 
@@ -614,7 +656,7 @@ public class ToolProvider {
 	    protected boolean onContentItem()
 	    {
 
-	        this.onError();
+	        return onError();
 
 	    }
 
@@ -625,7 +667,7 @@ public class ToolProvider {
 	 */
 	    protected boolean onRegister() {
 
-	        this.onError();
+	        return onError();
 
 	    }
 
@@ -637,7 +679,7 @@ public class ToolProvider {
 	    protected boolean onError()
 	    {
 
-	        this.doCallback("onError");
+	        return doCallback("onError");
 
 	    }
 
@@ -660,18 +702,35 @@ public class ToolProvider {
 	    {
 
 	        String callback = method;
+	        Boolean retVal = null;
 	        if (callback == null) {
 	            callback = getMessageType();
 	        }
-	        if (method_exists(this, callback)) { //reflection
-	            result = this.callback();
-	        } else if (is_null(method) && this.ok) {
-	            ok = false;
-	            reason = "Message type not supported: " + getMessageType();
+	        Class<? extends ToolProvider> clazz = this.getClass();
+	        boolean methodExists = false;
+	        for (Method m : clazz.getDeclaredMethods()) {
+	        	if (m.getName().equals(callback))
+					try {
+						retVal = (Boolean) m.invoke(this, (Object[])null);
+					} catch (IllegalAccessException e) {
+						e.printStackTrace();
+					} catch (IllegalArgumentException e) {
+						e.printStackTrace();
+					} catch (InvocationTargetException e) {
+						e.printStackTrace();
+					} //returns a boolean
+	        }
+	        if (!methodExists) { //didn't find the method in declared methods
+	        	if (StringUtils.isNotEmpty(method) && ok) {
+	        		ok = false;
+	        		reason = "Message type not supported: " + getMessageType();
+	        	}
 	        }
 	        if (ok && (getMessageType().equals("ToolProxyRegistrationRequest"))) {
 	            consumer.save();
 	        }
+	        
+	        return retVal;
 
 	    }
 
@@ -682,69 +741,63 @@ public class ToolProvider {
 	 *
 	 * @return string Output to be displayed (redirection, or display HTML or message)
 	 */
-	    private String result()
+	    private void result()
 	    {
+	    	boolean processed = false;
+	    	if (!this.ok && this.callbackHandlers.containsKey("error")) {
+	    	      Callback callbackHandler = this.callbackHandlers.get("error");
+	    	      processed = callbackHandler.execute(this);
+	    	    }
+	    	    if (!processed) {
+	    	      processed = true;
+	    	      try {
+	    	        if (!this.ok) {
+	    	//
+	    	/// If not valid, return an error message to the tool consumer if a return URL is provided
+	    	//
+	    	          if (this.returnUrl != null) {
+	    	            this.error = this.returnUrl.toExternalForm();
+	    	            if (this.error.indexOf("?") >= 0) {
+	    	              this.error += '&';
+	    	            } else {
+	    	              this.error += '?';
+	    	            }
+	    	            if (this.debugMode && (this.reason != null)) {
+	    	              this.error += "lti_errormsg=" + URLEncoder.encode("Debug error: " + this.reason, "UTF-8");
+	    	            } else {
+	    	              this.error += "lti_errormsg=" + URLEncoder.encode(this.message, "UTF-8");
+	    	              if (this.reason != null) {
+	    	                this.error += "&lti_errorlog=" + URLEncoder.encode("Debug error: " + this.reason, "UTF-8");
+	    	              }
+	    	            }
+	    	          } else if (this.debugMode) {
+	    	            this.error = this.reason;
+	    	          }
+	    	          if (this.error == null) {
+	    	            this.error = this.message;
+	    	          }
+	    	          if (this.error.startsWith("http://") || this.error.startsWith("https://")) {
+	    	            this.response.sendRedirect(this.error);
+	    	          } else {
+	    	            processed = false;
+	    	          }
+	    	        } else if (this.redirectUrl != null) {
+	    	          this.response.sendRedirect(this.redirectUrl.toExternalForm());
+	    	        } else if (this.returnUrl != null) {
+	    	          this.response.sendRedirect(this.returnUrl.toExternalForm());
+	    	        } else {
+	    	          processed = false;
+	    	        }
+	    	        if (!processed) {
+	    	          this.response.sendError(401, this.error);
+	    	        }
+	    	      } catch (IOException e) {
+	    	    	  e.printStackTrace();
+	    	      }
+	    	    }
 
-	        ok = false;
-	        if (!this.ok) {
-	            ok = this.onError();
-	        }
-	        if (!ok) {
-	            if (!this.ok) {
-
-	// If not valid, return an error message to the tool consumer if a return URL is provided
-	                if (returnUrl != null) {
-	                    String errorUrl = returnUrl.toExternalForm();
-	                    if (!StringUtils.contains(errorUrl, "?")) {
-	                        errorUrl += "?";
-	                    } else {
-	                        errorUrl += "&";
-	                    }
-	                    if (debugMode && StringUtils.isNotEmpty(reason)) {
-	                        errorUrl += "lti_errormsg=" + URLEncoder.encode("Debug error: " + reason, "UTF-8");
-	                    } else {
-	                        errorUrl += "lti_errormsg=" + URLEncoder.encode(message, "UTF-8");
-	                        if (StringUtils.isNotEmpty(reason)) {
-	                            errorUrl += "&lti_errorlog=" + URLEncoder.encode("Debug error: " + reason, "UTF-8");
-	                        }
-	                    }
-	                    String mt = getMessageType();
-	                    String v = getLTIVersion();
-	                    List<String> data = getData();
-	                    if (consumer != null && StringUtils.isNotEmpty(mt) && mt.equals("ContentItemSelectionRequest")) {
-	                        Map<String, List<String>> formParams = new HashMap<String, List<String>>();
-	                        if (data != null) {
-		                        formParams.put("data", data);	                        	
-	                        }
-	                        if (StringUtils.isEmpty(v)) {
-	                        	v = LTI_VERSION1;
-	                        }
-	                        formParams = consumer.signParameters(errorUrl, "ContentItemSelection", v, formParams);
-	                        String page = sendForm(errorUrl, formParams);
-	                        System.out.print(page);
-	                    } else {
-	                    	//PHP only convenience method to redirect
-	                        header("Location: {errorUrl}");
-	                    }
-	                    //exit;
-	                } else {
-	                    if (StringUtils.isNotEmpty(errorOutput)) {
-	                        echo errorOutput;
-	                    } else if (this.debugMode && StringUtils.isNotEmpty(reason)) {
-	                        echo "Debug error: " + reason;
-	                    } else {
-	                        echo "Error: " + message;
-	                    }
-	                }
-	            } else if (StringUtils.isNotEmpty(redirectUrl)) {
-	                header("Location: {this.redirectUrl}");
-	                exit;
-	            } else if (StringUtils.isNotEmpty(output)) {
-	                echo this.output;
-	            }
-	        }
-
-	    }
+	    	  }
+	   
 
 	/**
 	 * Check the authenticity of the LTI launch request.
@@ -756,500 +809,298 @@ public class ToolProvider {
 	    private boolean authenticate()
 	    {
 
-	// Get the consumer
-	        boolean doSaveConsumer = false;
-	// Check all required launch parameters
-	        String mt = getMessageType();
-	        ok = StringUtils.isNotEmpty(mt) && MESSAGE_TYPES.containsKey(mt);
-	        if (!ok) {
-	            reason = "Invalid or missing lti_message_type parameter.";
-	        }
-	        if (ok) {
-	        	String version = getLTIVersion();
-	            ok = isset(_POST["lti_version"]) && in_array(_POST["lti_version"], self::LTI_VERSIONS);
-	            if (!this.ok) {
-	                this.reason = "Invalid or missing lti_version parameter.";
-	            }
-	        }
-	        if (this.ok) {
-	            if (_POST["lti_message_type"] === "basic-lti-launch-request") {
-	                this.ok = isset(_POST["resource_link_id"]) && (strlen(trim(_POST["resource_link_id"])) > 0);
-	                if (!this.ok) {
-	                    this.reason = "Missing resource link ID.";
-	                }
-	            } else if (_POST["lti_message_type"] === "ContentItemSelectionRequest") {
-	                if (isset(_POST["accept_media_types"]) && (strlen(trim(_POST["accept_media_types"])) > 0)) {
-	                    mediaTypes = array_filter(explode(",", str_replace(" ", "", _POST["accept_media_types"])), "strlen");
-	                    mediaTypes = array_unique(mediaTypes);
-	                    this.ok = count(mediaTypes) > 0;
-	                    if (!this.ok) {
-	                        this.reason = "No accept_media_types found.";
-	                    } else {
-	                        this.mediaTypes = mediaTypes;
-	                    }
-	                } else {
-	                    this.ok = false;
-	                }
-	                if (this.ok && isset(_POST["accept_presentation_document_targets"]) && (strlen(trim(_POST["accept_presentation_document_targets"])) > 0)) {
-	                    documentTargets = array_filter(explode(",", str_replace(" ", "", _POST["accept_presentation_document_targets"])), "strlen");
-	                    documentTargets = array_unique(documentTargets);
-	                    this.ok = count(documentTargets) > 0;
-	                    if (!this.ok) {
-	                        this.reason = "Missing or empty accept_presentation_document_targets parameter.";
-	                    } else {
-	                        foreach (documentTargets as documentTarget) {
-	                            this.ok = this.checkValue(documentTarget, array("embed", "frame", "iframe", "window", "popup", "overlay", "none"),
-	                                 "Invalid value in accept_presentation_document_targets parameter: %s.");
-	                            if (!this.ok) {
-	                                break;
-	                            }
-	                        }
-	                        if (this.ok) {
-	                            this.documentTargets = documentTargets;
-	                        }
-	                    }
-	                } else {
-	                    this.ok = false;
-	                }
-	                if (this.ok) {
-	                    this.ok = isset(_POST["content_item_return_url"]) && (strlen(trim(_POST["content_item_return_url"])) > 0);
-	                    if (!this.ok) {
-	                        this.reason = "Missing content_item_return_url parameter.";
-	                    }
-	                }
-	            } else if (_POST["lti_message_type"] == "ToolProxyRegistrationRequest") {
-	                this.ok = ((isset(_POST["reg_key"]) && (strlen(trim(_POST["reg_key"])) > 0)) &&
-	                             (isset(_POST["reg_password"]) && (strlen(trim(_POST["reg_password"])) > 0)) &&
-	                             (isset(_POST["tc_profile_url"]) && (strlen(trim(_POST["tc_profile_url"])) > 0)) &&
-	                             (isset(_POST["launch_presentation_return_url"]) && (strlen(trim(_POST["launch_presentation_return_url"])) > 0)));
-	                if (this.debugMode && !this.ok) {
-	                    this.reason = "Missing message parameters.";
-	                }
-	            }
-	        }
-	        now = time();
-	// Check consumer key
-	        if (this.ok && (_POST["lti_message_type"] != "ToolProxyRegistrationRequest")) {
-	            this.ok = isset(_POST["oauth_consumer_key"]);
-	            if (!this.ok) {
-	                this.reason = "Missing consumer key.";
-	            }
-	            if (this.ok) {
-	                this.consumer = new ToolConsumer(_POST["oauth_consumer_key"], this.dataConnector);
-	                this.ok = !is_null(this.consumer.created);
-	                if (!this.ok) {
-	                    this.reason = "Invalid consumer key.";
-	                }
-	            }
-	            if (this.ok) {
-	                today = date("Y-m-d", now);
-	                if (is_null(this.consumer.lastAccess)) {
-	                    doSaveConsumer = true;
-	                } else {
-	                    last = date("Y-m-d", this.consumer.lastAccess);
-	                    doSaveConsumer = doSaveConsumer || (last !== today);
-	                }
-	                this.consumer.last_access = now;
-	                try {
-	                    store = new OAuthDataStore(this);
-	                    server = new OAuth\OAuthServer(store);
-	                    method = new OAuth\OAuthSignatureMethod_HMAC_SHA1();
-	                    server.add_signature_method(method);
-	                    request = OAuth\OAuthRequest::from_request();
-	                    res = server.verify_request(request);
-	                } catch (\Exception e) {
-	                    this.ok = false;
-	                    if (empty(this.reason)) {
-	                        if (this.debugMode) {
-	                            consumer = new OAuth\OAuthConsumer(this.consumer.getKey(), this.consumer.secret);
-	                            signature = request.build_signature(method, consumer, false);
-	                            this.reason = e.getMessage();
-	                            if (empty(this.reason)) {
-	                                this.reason = "OAuth exception";
-	                            }
-	                            this.details[] = "Timestamp: " . time();
-	                            this.details[] = "Signature: {signature}";
-	                            this.details[] = "Base string: {request.base_string}]";
-	                        } else {
-	                            this.reason = "OAuth signature check failed - perhaps an incorrect secret or timestamp.";
-	                        }
-	                    }
-	                }
-	            }
-	            if (this.ok) {
-	                today = date("Y-m-d", now);
-	                if (is_null(this.consumer.lastAccess)) {
-	                    doSaveConsumer = true;
-	                } else {
-	                    last = date("Y-m-d", this.consumer.lastAccess);
-	                    doSaveConsumer = doSaveConsumer || (last !== today);
-	                }
-	                this.consumer.last_access = now;
-	                if (this.consumer.protected) {
-	                    if (!is_null(this.consumer.consumerGuid)) {
-	                        this.ok = empty(_POST["tool_consumer_instance_guid"]) ||
-	                             (this.consumer.consumerGuid === _POST["tool_consumer_instance_guid"]);
-	                        if (!this.ok) {
-	                            this.reason = "Request is from an invalid tool consumer.";
-	                        }
-	                    } else {
-	                        this.ok = isset(_POST["tool_consumer_instance_guid"]);
-	                        if (!this.ok) {
-	                            this.reason = "A tool consumer GUID must be included in the launch request.";
-	                        }
-	                    }
-	                }
-	                if (this.ok) {
-	                    this.ok = this.consumer.enabled;
-	                    if (!this.ok) {
-	                        this.reason = "Tool consumer has not been enabled by the tool provider.";
-	                    }
-	                }
-	                if (this.ok) {
-	                    this.ok = is_null(this.consumer.enableFrom) || (this.consumer.enableFrom <= now);
-	                    if (this.ok) {
-	                        this.ok = is_null(this.consumer.enableUntil) || (this.consumer.enableUntil > now);
-	                        if (!this.ok) {
-	                            this.reason = "Tool consumer access has expired.";
-	                        }
-	                    } else {
-	                        this.reason = "Tool consumer access is not yet available.";
-	                    }
-	                }
-	            }
+//
+/// Set debug mode
+//
+    this.debugMode = (this.request.getParameter("custom_debug") != null) &&
+       this.request.getParameter("custom_debug").equalsIgnoreCase("true");
+//
+/// Get the consumer
+//
+    boolean doSaveConsumer = false;
+// Check all required launch parameters
+    this.ok = this.request.getParameter("oauth_consumer_key") != null;
+    if (this.ok) {
+      this.ok = (this.request.getParameter("lti_message_type") != null) &&
+         this.request.getParameter("lti_message_type").equals("basic-lti-launch-request");
+    }
+    if (this.ok) {
+      this.ok = (this.request.getParameter("lti_version") != null) &&
+         (this.request.getParameter("lti_version").equals(LTI_VERSION1) ||
+          this.request.getParameter("lti_version").equals(LTI_VERSION2));
+    }
+    if (this.ok) {
+      this.ok = (this.request.getParameter("resource_link_id") != null) &&
+         this.request.getParameter("resource_link_id").trim().length() > 0;
+    }
+// Check consumer key
+    if (this.ok) {
+      this.consumer = new ToolConsumer(this.request.getParameter("oauth_consumer_key"), this.dataConnector, false);
+      this.ok = this.consumer.getCreated() != null;
+      if (this.debugMode && !this.ok) {
+        this.reason = "Invalid consumer key.";
+      }
+    }
+    DateTime now = DateTime.now();
+    if (this.ok) {
+      if (this.consumer.getLastAccess() == null) {
+        doSaveConsumer = true;
+      } else {
+        DateTime last = this.consumer.getLastAccess();
+        doSaveConsumer = doSaveConsumer || last.isBefore(now.withTimeAtStartOfDay());
+      }
+      this.consumer.setLastAccess(now);
+      OAuthConsumer oAuthConsumer = new OAuthConsumer("about:blank", this.consumer.getKey(), this.consumer.getSecret(), null);
+      OAuthAccessor oAuthAccessor = new OAuthAccessor(oAuthConsumer);
+      OAuthValidator oAuthValidator = new SimpleOAuthValidator();
+      OAuthMessage oAuthMessage = OAuthServlet.getMessage(this.request, null);
+      try {
+        oAuthValidator.validateMessage(oAuthMessage, oAuthAccessor);
+      } catch (Exception e) {
+        this.ok = false;
+        if (this.reason == null) {
+          this.reason = "OAuth signature check failed - perhaps an incorrect secret or timestamp.";
+        }
+      }
+    }
+    if (this.ok && this.consumer.isThisprotected()) {
+      if (this.consumer.getConsumerGuid() != null) {
+        this.ok = (this.request.getParameter("tool_consumer_instance_guid") != null) &&
+           (this.request.getParameter("tool_consumer_instance_guid").length() > 0) &&
+           this.consumer.getConsumerGuid().equals(this.request.getParameter("tool_consumer_instance_guid"));
+        if (this.debugMode && !this.ok) {
+          this.reason = "Request is from an invalid tool consumer.";
+        }
+      } else {
+        this.ok = this.request.getParameter("tool_consumer_instance_guid") != null;
+        if (this.debugMode && !this.ok) {
+          this.reason = "A tool consumer GUID must be included in the launch request.";
+        }
+      }
+    }
+    if (this.ok) {
+      this.ok = this.consumer.isEnabled();
+      if (this.debugMode && !this.ok) {
+        this.reason = "Tool consumer has not been enabled by the tool provider.";
+      }
+    }
+    if (this.ok) {
+      this.ok = (this.consumer.getEnableFrom() == null) || now.isAfter(this.consumer.getEnableFrom());
+      if (this.ok) {
+        this.ok = (this.consumer.getEnableUntil() == null) || this.consumer.getEnableUntil().isAfter(now);
+        if (this.debugMode && !this.ok) {
+          this.reason = "Tool consumer access has expired.";
+        }
+      } else if (this.debugMode) {
+        this.reason = "Tool consumer access is not yet available.";
+      }
+    }
+// Check nonce value
+    if (this.ok) {
+      ConsumerNonce nonce = new ConsumerNonce(this.consumer, this.request.getParameter("oauth_nonce"));
+      this.ok = !nonce.load();
+      if (this.ok) {
+        this.ok = nonce.save();
+      }
+      if (this.debugMode && !this.ok) {
+        this.reason = "Invalid nonce.";
+      }
+    }
+//
+/// Validate launch parameters
+//
+    if (this.ok) {
+      List<String> invalidParameters = new ArrayList<String>();
+      for (String name : constraints.keySet()) {
+        ParameterConstraint parameterConstraint = this.constraints.get(name);
+        boolean err = false;
+        if (parameterConstraint.isRequired()) {
+          if ((this.request.getParameter(name) == null) || (this.request.getParameter(name).trim().length() <= 0)) {
+            invalidParameters.add(name);
+            err = true;
+          }
+        }
+        if (!err && (parameterConstraint.getMaxLength() != null) && (this.request.getParameter(name) != null)) {
+          if (this.request.getParameter(name).trim().length() > parameterConstraint.getMaxLength()) {
+            invalidParameters.add(name);
+          }
+        }
+      }
+      if (invalidParameters.size() > 0) {
+        this.ok = false;
+        if (this.reason == null) {
+          StringBuilder msg = new StringBuilder("Invalid parameter(s): ");
+          for (int i = 0; i < invalidParameters.size(); i++) {
+            if (i > 0) {
+              msg.append(", ");
+            }
+            msg.append(invalidParameters.get(i));
+          }
+          this.reason = msg.toString();
+        }
+      }
+    }
 
-	// Validate other message parameter values
-	            if (this.ok) {
-	                if (_POST["lti_message_type"] === "ContentItemSelectionRequest") {
-	                    if (isset(_POST["accept_unsigned"])) {
-	                        this.ok = this.checkValue(_POST["accept_unsigned"], array("true", "false"), "Invalid value for accept_unsigned parameter: %s.");
-	                    }
-	                    if (this.ok && isset(_POST["accept_multiple"])) {
-	                        this.ok = this.checkValue(_POST["accept_multiple"], array("true", "false"), "Invalid value for accept_multiple parameter: %s.");
-	                    }
-	                    if (this.ok && isset(_POST["accept_copy_advice"])) {
-	                        this.ok = this.checkValue(_POST["accept_copy_advice"], array("true", "false"), "Invalid value for accept_copy_advice parameter: %s.");
-	                    }
-	                    if (this.ok && isset(_POST["auto_create"])) {
-	                        this.ok = this.checkValue(_POST["auto_create"], array("true", "false"), "Invalid value for auto_create parameter: %s.");
-	                    }
-	                    if (this.ok && isset(_POST["can_confirm"])) {
-	                        this.ok = this.checkValue(_POST["can_confirm"], array("true", "false"), "Invalid value for can_confirm parameter: %s.");
-	                    }
-	                } else if (isset(_POST["launch_presentation_document_target"])) {
-	                    this.ok = this.checkValue(_POST["launch_presentation_document_target"], array("embed", "frame", "iframe", "window", "popup", "overlay"),
-	                         "Invalid value for launch_presentation_document_target parameter: %s.");
-	                }
-	            }
-	        }
+    if (this.ok) {
+      this.consumer.setDefaultEmail(this.defaultEmail);
+//
+/// Set the request context/resource link
+//
+      this.resourceLink = ResourceLink.fromConsumer(this.consumer, this.request.getParameter("resource_link_id").trim());
+      if (this.request.getParameter("context_id") != null) {
+        this.resourceLink.setContextId(this.request.getParameter("context_id").trim());
+      }
+      this.resourceLink.setLtiResourceLinkId(this.request.getParameter("resource_link_id").trim());
+      StringBuilder title = new StringBuilder();
+      if (this.request.getParameter("context_title") != null) {
+        title.append(this.request.getParameter("context_title").trim());
+      }
+      if ((this.request.getParameter("resource_link_title") != null) &&
+          (this.request.getParameter("resource_link_title").trim().length() > 0)) {
+        if (title.length() > 0) {
+          title.append(": ");
+        }
+        title.append(this.request.getParameter("resource_link_title").trim());
+      }
+      if (title.length() <= 0) {
+        title.append("Course ").append(this.resourceLink.getId());
+      }
+      this.resourceLink.setTitle(title.toString());
+// Save LTI parameters
+      for (String name : LTI_RESOURCE_LINK_SETTING_NAMES) {
+        this.resourceLink.setSetting(name, this.request.getParameter(name));
+      }
+// Delete any existing custom parameters
+      Map<String,List<String>> settings = this.resourceLink.getSettings();
+      for (String name : settings.keySet()) {
+        if (name.startsWith("custom_")) {
+          this.resourceLink.setSetting(name, (String)null);
+        }
+      }
+// Save custom parameters
+      for (String name : settings.keySet()) {
+        if (name.startsWith("custom_")) {
+        	resourceLink.setSetting(name, settings.get(name));
+        }
+      }
+//
+/// Set the user instance
+//
+      String userId = "";
+      if (this.request.getParameter("user_id") != null) {
+        userId = this.request.getParameter("user_id").trim();
+      }
+      this.user = User.fromResourceLink(this.resourceLink, userId);
+//
+/// Set the user name
+//
+      String firstname = "";
+      if (this.request.getParameter("lis_person_name_given") != null) {
+        firstname = this.request.getParameter("lis_person_name_given");
+      }
+      String lastname = "";
+      if (this.request.getParameter("lis_person_name_family") != null) {
+        lastname = this.request.getParameter("lis_person_name_family");
+      }
+      String fullname = "";
+      if (this.request.getParameter("lis_person_name_full") != null) {
+        fullname = this.request.getParameter("lis_person_name_full");
+      }
+      this.user.setNames(firstname, lastname, fullname);
+//
+/// Set the user email
+//
+      String email = "";
+      if (this.request.getParameter("lis_person_contact_email_primary") != null) {
+        email = this.request.getParameter("lis_person_contact_email_primary");
+      }
+      this.user.setEmail(email, this.defaultEmail);
+//
+/// Set the user roles
+//
+      if (this.request.getParameter("roles") != null) {
+        this.user.setRoles(this.request.getParameter("roles"));
+      }
+//
+/// Save the user instance
+//
+      if (this.request.getParameter("lis_result_sourcedid") != null) {
+        if (!this.request.getParameter("lis_result_sourcedid").equals(this.user.getLtiResultSourcedId())) {
+          this.user.setLtiResultSourcedId(this.request.getParameter("lis_result_sourcedid"));
+          this.user.save();
+        }
+      } else if (this.user.getLtiResultSourcedId() != null) {
+        this.user.delete();
+      }
+//
+/// Initialise the consumer and check for changes
+//
+      if (!this.request.getParameter("lti_version").equals(this.consumer.getLtiVersion())) {
+        this.consumer.setLtiVersion(this.request.getParameter("lti_version"));
+        doSaveConsumer = true;
+      }
+      if (this.request.getParameter("tool_consumer_instance_name") != null) {
+        if (!this.request.getParameter("tool_consumer_instance_name").equals(this.consumer.getConsumerName())) {
+          this.consumer.setConsumerName(this.request.getParameter("tool_consumer_instance_name"));
+          doSaveConsumer = true;
+        }
+      }
+      if (this.request.getParameter("tool_consumer_info_product_family_code") != null) {
+        String version = this.request.getParameter("tool_consumer_info_product_family_code");
+        if (this.request.getParameter("tool_consumer_info_version") != null) {
+          version += "-" + this.request.getParameter("tool_consumer_info_version");
+        }
+// do not delete any existing consumer version if none is passed
+        if (!version.equals(this.consumer.getConsumerVersion())) {
+          this.consumer.setConsumerVersion(version);
+          doSaveConsumer = true;
+        }
+      } else if ((this.request.getParameter("ext_lms") != null) &&
+         !this.request.getParameter("ext_lms").equals(this.consumer.getConsumerName())) {
+        this.consumer.setConsumerVersion(this.request.getParameter("ext_lms"));
+        doSaveConsumer = true;
+      }
+      if ((this.request.getParameter("tool_consumer_instance_guid") != null) &&
+         (this.consumer.getConsumerGuid() == null)) {
+        this.consumer.setConsumerGuid(this.request.getParameter("tool_consumer_instance_guid"));
+        doSaveConsumer = true;
+      }
+      if (this.request.getParameter("launch_presentation_css_url") != null) {
+        if (!this.request.getParameter("launch_presentation_css_url").equals(this.consumer.getCssPath())) {
+          this.consumer.setCssPath(this.request.getParameter("launch_presentation_css_url"));
+          doSaveConsumer = true;
+        }
+      } else if ((this.request.getParameter("ext_launch_presentation_css_url") != null) &&
+         !this.request.getParameter("ext_launch_presentation_css_url").equals(this.consumer.getCssPath())) {
+        this.consumer.setCssPath(this.request.getParameter("ext_launch_presentation_css_url"));
+        doSaveConsumer = true;
+      } else if (this.consumer.getCssPath() != null) {
+        this.consumer.setCssPath(null);
+        doSaveConsumer = true;
+      }
+    }
+//
+/// Persist changes to consumer
+//
+    if (doSaveConsumer) {
+      this.consumer.save();
+    }
 
-	        if (this.ok && (_POST["lti_message_type"] === "ToolProxyRegistrationRequest")) {
-	            this.ok = _POST["lti_version"] == self::LTI_VERSION2;
-	            if (!this.ok) {
-	                this.reason = "Invalid lti_version parameter";
-	            }
-	            if (this.ok) {
-	                http = new HTTPMessage(_POST["tc_profile_url"], "GET", null, "Accept: application/vnd.ims.lti.v2.toolconsumerprofile+json");
-	                this.ok = http.send();
-	                if (!this.ok) {
-	                    this.reason = "Tool consumer profile not accessible.";
-	                } else {
-	                    tcProfile = json_decode(http.response);
-	                    this.ok = !is_null(tcProfile);
-	                    if (!this.ok) {
-	                        this.reason = "Invalid JSON in tool consumer profile.";
-	                    }
-	                }
-	            }
-	// Check for required capabilities
-	            if (this.ok) {
-	                this.consumer = new ToolConsumer(_POST["reg_key"], this.dataConnector);
-	                this.consumer.profile = tcProfile;
-	                capabilities = this.consumer.profile.capability_offered;
-	                missing = array();
-	                foreach (this.resourceHandlers as resourceHandler) {
-	                    foreach (resourceHandler.requiredMessages as message) {
-	                        if (!in_array(message.type, capabilities)) {
-	                            missing[message.type] = true;
-	                        }
-	                    }
-	                }
-	                foreach (this.constraints as name => constraint) {
-	                    if (constraint["required"]) {
-	                        if (!in_array(name, capabilities) && !in_array(name, array_flip(capabilities))) {
-	                            missing[name] = true;
-	                        }
-	                    }
-	                }
-	                if (!empty(missing)) {
-	                    ksort(missing);
-	                    this.reason = "Required capability not offered - \"" . implode("\", \"", array_keys(missing)) . "\"";
-	                    this.ok = false;
-	                }
-	            }
-	// Check for required services
-	            if (this.ok) {
-	                foreach (this.requiredServices as service) {
-	                    foreach (service.formats as format) {
-	                        if (!this.findService(format, service.actions)) {
-	                            if (this.ok) {
-	                                this.reason = "Required service(s) not offered - ";
-	                                this.ok = false;
-	                            } else {
-	                                this.reason .= ", ";
-	                            }
-	                            this.reason .= ""{format}" [" . implode(", ", service.actions) . "]";
-	                        }
-	                    }
-	                }
-	            }
-	            if (this.ok) {
-	                if (_POST["lti_message_type"] === "ToolProxyRegistrationRequest") {
-	                    this.consumer.profile = tcProfile;
-	                    this.consumer.secret = _POST["reg_password"];
-	                    this.consumer.ltiVersion = _POST["lti_version"];
-	                    this.consumer.name = tcProfile.product_instance.service_owner.service_owner_name.default_value;
-	                    this.consumer.consumerName = this.consumer.name;
-	                    this.consumer.consumerVersion = "{tcProfile.product_instance.product_info.product_family.code}-{tcProfile.product_instance.product_info.product_version}";
-	                    this.consumer.consumerGuid = tcProfile.product_instance.guid;
-	                    this.consumer.enabled = true;
-	                    this.consumer.protected = true;
-	                    doSaveConsumer = true;
-	                }
-	            }
-	        } else if (this.ok && !empty(_POST["custom_tc_profile_url"]) && empty(this.consumer.profile)) {
-	            http = new HTTPMessage(_POST["custom_tc_profile_url"], "GET", null, "Accept: application/vnd.ims.lti.v2.toolconsumerprofile+json");
-	            if (http.send()) {
-	                tcProfile = json_decode(http.response);
-	                if (!is_null(tcProfile)) {
-	                    this.consumer.profile = tcProfile;
-	                    doSaveConsumer = true;
-	                }
-	            }
-	        }
+    if (this.ok) {
+//
+/// Check if a share arrangement is in place for this resource link
+//
+      this.ok = this.checkForShare();
+//
+/// Persist changes to resource link
+//
+      this.resourceLink.save();
+    }
 
-	// Validate message parameter constraints
-	        if (this.ok) {
-	            invalidParameters = array();
-	            foreach (this.constraints as name => constraint) {
-	                if (empty(constraint["messages"]) || in_array(_POST["lti_message_type"], constraint["messages"])) {
-	                    ok = true;
-	                    if (constraint["required"]) {
-	                        if (!isset(_POST[name]) || (strlen(trim(_POST[name])) <= 0)) {
-	                            invalidParameters[] = "{name} (missing)";
-	                            ok = false;
-	                        }
-	                    }
-	                    if (ok && !is_null(constraint["max_length"]) && isset(_POST[name])) {
-	                        if (strlen(trim(_POST[name])) > constraint["max_length"]) {
-	                            invalidParameters[] = "{name} (too long)";
-	                        }
-	                    }
-	                }
-	            }
-	            if (count(invalidParameters) > 0) {
-	                this.ok = false;
-	                if (empty(this.reason)) {
-	                    this.reason = "Invalid parameter(s): " . implode(", ", invalidParameters) . ".";
-	                }
-	            }
-	        }
+    return this.ok;
 
-	        if (this.ok) {
+  }
 
-	// Set the request context
-	            if (isset(_POST["context_id"])) {
-	                this.context = Context::fromConsumer(this.consumer, trim(_POST["context_id"]));
-	                title = "";
-	                if (isset(_POST["context_title"])) {
-	                    title = trim(_POST["context_title"]);
-	                }
-	                if (empty(title)) {
-	                    title = "Course {this.context.getId()}";
-	                }
-	                this.context.title = title;
-	            }
-
-	// Set the request resource link
-	            if (isset(_POST["resource_link_id"])) {
-	                contentItemId = "";
-	                if (isset(_POST["custom_content_item_id"])) {
-	                    contentItemId = _POST["custom_content_item_id"];
-	                }
-	                this.resourceLink = ResourceLink::fromConsumer(this.consumer, trim(_POST["resource_link_id"]), contentItemId);
-	                if (!empty(this.context)) {
-	                    this.resourceLink.setContextId(this.context.getRecordId());
-	                }
-	                title = "";
-	                if (isset(_POST["resource_link_title"])) {
-	                    title = trim(_POST["resource_link_title"]);
-	                }
-	                if (empty(title)) {
-	                    title = "Resource {this.resourceLink.getId()}";
-	                }
-	                this.resourceLink.title = title;
-	// Delete any existing custom parameters
-	                foreach (this.consumer.getSettings() as name => value) {
-	                    if (strpos(name, "custom_") === 0) {
-	                        this.consumer.setSetting(name);
-	                        doSaveConsumer = true;
-	                    }
-	                }
-	                if (!empty(this.context)) {
-	                    foreach (this.context.getSettings() as name => value) {
-	                        if (strpos(name, "custom_") === 0) {
-	                            this.context.setSetting(name);
-	                        }
-	                    }
-	                }
-	                foreach (this.resourceLink.getSettings() as name => value) {
-	                    if (strpos(name, "custom_") === 0) {
-	                        this.resourceLink.setSetting(name);
-	                    }
-	                }
-	// Save LTI parameters
-	                foreach (self::LTI_CONSUMER_SETTING_NAMES as name) {
-	                    if (isset(_POST[name])) {
-	                        this.consumer.setSetting(name, _POST[name]);
-	                    } else {
-	                        this.consumer.setSetting(name);
-	                    }
-	                }
-	                if (!empty(this.context)) {
-	                    foreach (self::LTI_CONTEXT_SETTING_NAMES as name) {
-	                        if (isset(_POST[name])) {
-	                            this.context.setSetting(name, _POST[name]);
-	                        } else {
-	                            this.context.setSetting(name);
-	                        }
-	                    }
-	                }
-	                foreach (self::LTI_RESOURCE_LINK_SETTING_NAMES as name) {
-	                    if (isset(_POST[name])) {
-	                        this.resourceLink.setSetting(name, _POST[name]);
-	                    } else {
-	                        this.resourceLink.setSetting(name);
-	                    }
-	                }
-	// Save other custom parameters
-	                foreach (_POST as name => value) {
-	                    if ((strpos(name, "custom_") === 0) &&
-	                        !in_array(name, array_merge(self::LTI_CONSUMER_SETTING_NAMES, self::LTI_CONTEXT_SETTING_NAMES, self::LTI_RESOURCE_LINK_SETTING_NAMES))) {
-	                        this.resourceLink.setSetting(name, value);
-	                    }
-	                }
-	            }
-
-	// Set the user instance
-	            userId = "";
-	            if (isset(_POST["user_id"])) {
-	                userId = trim(_POST["user_id"]);
-	            }
-
-	            this.user = User::fromResourceLink(this.resourceLink, userId);
-
-	// Set the user name
-	            firstname = (isset(_POST["lis_person_name_given"])) ? _POST["lis_person_name_given"] : "";
-	            lastname = (isset(_POST["lis_person_name_family"])) ? _POST["lis_person_name_family"] : "";
-	            fullname = (isset(_POST["lis_person_name_full"])) ? _POST["lis_person_name_full"] : "";
-	            this.user.setNames(firstname, lastname, fullname);
-
-	// Set the user email
-	            email = (isset(_POST["lis_person_contact_email_primary"])) ? _POST["lis_person_contact_email_primary"] : "";
-	            this.user.setEmail(email, this.defaultEmail);
-
-	// Set the user image URI
-	            if (isset(_POST["user_image"])) {
-	                this.user.image = _POST["user_image"];
-	            }
-
-	// Set the user roles
-	            if (isset(_POST["roles"])) {
-	                this.user.roles = self::parseRoles(_POST["roles"]);
-	            }
-
-	// Initialise the consumer and check for changes
-	            this.consumer.defaultEmail = this.defaultEmail;
-	            if (this.consumer.ltiVersion !== _POST["lti_version"]) {
-	                this.consumer.ltiVersion = _POST["lti_version"];
-	                doSaveConsumer = true;
-	            }
-	            if (isset(_POST["tool_consumer_instance_name"])) {
-	                if (this.consumer.consumerName !== _POST["tool_consumer_instance_name"]) {
-	                    this.consumer.consumerName = _POST["tool_consumer_instance_name"];
-	                    doSaveConsumer = true;
-	                }
-	            }
-	            if (isset(_POST["tool_consumer_info_product_family_code"])) {
-	                version = _POST["tool_consumer_info_product_family_code"];
-	                if (isset(_POST["tool_consumer_info_version"])) {
-	                    version .= "-{_POST["tool_consumer_info_version"]}";
-	                }
-	// do not delete any existing consumer version if none is passed
-	                if (this.consumer.consumerVersion !== version) {
-	                    this.consumer.consumerVersion = version;
-	                    doSaveConsumer = true;
-	                }
-	            } else if (isset(_POST["ext_lms"]) && (this.consumer.consumerName !== _POST["ext_lms"])) {
-	                this.consumer.consumerVersion = _POST["ext_lms"];
-	                doSaveConsumer = true;
-	            }
-	            if (isset(_POST["tool_consumer_instance_guid"])) {
-	                if (is_null(this.consumer.consumerGuid)) {
-	                    this.consumer.consumerGuid = _POST["tool_consumer_instance_guid"];
-	                    doSaveConsumer = true;
-	                } else if (!this.consumer.protected) {
-	                    doSaveConsumer = (this.consumer.consumerGuid !== _POST["tool_consumer_instance_guid"]);
-	                    if (doSaveConsumer) {
-	                        this.consumer.consumerGuid = _POST["tool_consumer_instance_guid"];
-	                    }
-	                }
-	            }
-	            if (isset(_POST["launch_presentation_css_url"])) {
-	                if (this.consumer.cssPath !== _POST["launch_presentation_css_url"]) {
-	                    this.consumer.cssPath = _POST["launch_presentation_css_url"];
-	                    doSaveConsumer = true;
-	                }
-	            } else if (isset(_POST["ext_launch_presentation_css_url"]) &&
-	                 (this.consumer.cssPath !== _POST["ext_launch_presentation_css_url"])) {
-	                this.consumer.cssPath = _POST["ext_launch_presentation_css_url"];
-	                doSaveConsumer = true;
-	            } else if (!empty(this.consumer.cssPath)) {
-	                this.consumer.cssPath = null;
-	                doSaveConsumer = true;
-	            }
-	        }
-
-	// Persist changes to consumer
-	        if (doSaveConsumer) {
-	            this.consumer.save();
-	        }
-	        if (this.ok && isset(this.context)) {
-	            this.context.save();
-	        }
-	        if (this.ok && isset(this.resourceLink)) {
-
-	// Check if a share arrangement is in place for this resource link
-	            this.ok = this.checkForShare();
-
-	// Persist changes to resource link
-	            this.resourceLink.save();
-
-	// Save the user instance
-	            if (isset(_POST["lis_result_sourcedid"])) {
-	                if (this.user.ltiResultSourcedId !== _POST["lis_result_sourcedid"]) {
-	                    this.user.ltiResultSourcedId = _POST["lis_result_sourcedid"];
-	                    this.user.save();
-	                }
-	            } else if (!empty(this.user.ltiResultSourcedId)) {
-	                this.user.ltiResultSourcedId = "";
-	                this.user.save();
-	            }
-	        }
-
-	        return this.ok;
-
-	    }
 
 	/**
 	 * Check if a share arrangement is in place.
@@ -1260,78 +1111,80 @@ public class ToolProvider {
 	    {
 
 	        ok = true;
-	        doSaveResourceLink = true;
+	        boolean doSaveResourceLink = true;
 
-	        id = this.resourceLink.primaryResourceLinkId;
+	        String key = this.resourceLink.getPrimaryConsumerKey();
+	        String id = this.resourceLink.getPrimaryResourceLinkId();
+	        String shareKeyValue = this.request.getParameter("custom_share_key");
 
-	        shareRequest = isset(_POST["custom_share_key"]) && !empty(_POST["custom_share_key"]);
-	        if (shareRequest) {
-	            if (!this.allowSharing) {
+	        boolean isShareRequest = (shareKeyValue != null) && (shareKeyValue.length() > 0);
+	        if (isShareRequest) {
+	            if (!allowSharing) {
 	                ok = false;
-	                this.reason = "Your sharing request has been refused because sharing is not being permitted.";
+	                reason = "Your sharing request has been refused because sharing is not being permitted.";
 	            } else {
 	// Check if this is a new share key
-	                shareKey = new ResourceLinkShareKey(this.resourceLink, _POST["custom_share_key"]);
-	                if (!is_null(shareKey.primaryConsumerKey) && !is_null(shareKey.primaryResourceLinkId)) {
+	            	ResourceLinkShareKey shareKey = new ResourceLinkShareKey(resourceLink, shareKeyValue);
+	            	
+	                if ((shareKey.getPrimaryConsumerKey() != null) && (shareKey.getResourceLinkId() != null)) {
 	// Update resource link with sharing primary resource link details
-	                    key = shareKey.primaryConsumerKey;
-	                    id = shareKey.primaryResourceLinkId;
-	                    ok = (key != this.consumer.getKey()) || (id != this.resourceLink.getId());
+	                    key = shareKey.getPrimaryConsumerKey();
+	                    id = shareKey.getResourceLinkId();
+	                    ok = (!key.equals(consumer.getKey()) || !(id.equals(resourceLink.getId())));
 	                    if (ok) {
-	                        this.resourceLink.primaryConsumerKey = key;
-	                        this.resourceLink.primaryResourceLinkId = id;
-	                        this.resourceLink.shareApproved = shareKey.autoApprove;
-	                        ok = this.resourceLink.save();
+	                        resourceLink.setPrimaryConsumerKey(key);
+	                        resourceLink.setPrimaryResourceLinkId(id);
+	                        resourceLink.setShareApproved(shareKey.isAutoApprove());
+	                        ok = resourceLink.save();
 	                        if (ok) {
 	                            doSaveResourceLink = false;
-	                            this.user.getResourceLink().primaryConsumerKey = key;
-	                            this.user.getResourceLink().primaryResourceLinkId = id;
-	                            this.user.getResourceLink().shareApproved = shareKey.autoApprove;
-	                            this.user.getResourceLink().updated = time();
+	                            user.getResourceLink().setPrimaryConsumerKey(key);
+	                            user.getResourceLink().setPrimaryResourceLinkId(id);
+	                            user.getResourceLink().setShareApproved(shareKey.isAutoApprove());
+	                            user.getResourceLink().setUpdated(DateTime.now());
 	// Remove share key
 	                            shareKey.delete();
 	                        } else {
-	                            this.reason = "An error occurred initialising your share arrangement.";
+	                            reason = "An error occurred initialising your share arrangement.";
 	                        }
 	                    } else {
-	                        this.reason = "It is not possible to share your resource link with yourself.";
+	                        reason = "It is not possible to share your resource link with yourself.";
 	                    }
 	                }
 	                if (ok) {
-	                    ok = !is_null(key);
+	                    ok = StringUtils.isNotEmpty(key);
 	                    if (!ok) {
-	                        this.reason = "You have requested to share a resource link but none is available.";
+	                        reason = "You have requested to share a resource link but none is available.";
 	                    } else {
-	                        ok = (!is_null(this.user.getResourceLink().shareApproved) && this.user.getResourceLink().shareApproved);
+	                        ok = (user.getResourceLink().isShareApproved());
 	                        if (!ok) {
-	                            this.reason = "Your share request is waiting to be approved.";
+	                            reason = "Your share request is waiting to be approved.";
 	                        }
 	                    }
 	                }
 	            }
 	        } else {
 	// Check no share is in place
-	            ok = is_null(id);
+	            ok = StringUtils.isEmpty(id);
 	            if (!ok) {
-	                this.reason = "You have not requested to share a resource link but an arrangement is currently in place.";
+	                reason = "You have not requested to share a resource link but an arrangement is currently in place.";
 	            }
 	        }
 
 	// Look up primary resource link
-	        if (ok && !is_null(id)) {
-	            consumer = new ToolConsumer(key, this.dataConnector);
-	            ok = !is_null(consumer.created);
+	        if (ok && StringUtils.isNotEmpty(id)) {
+	            consumer = new ToolConsumer(key, dataConnector);
+	            ok = (consumer.getCreated() != null);
 	            if (ok) {
 	                resourceLink = ResourceLink.fromConsumer(consumer, id);
-	                ok = !is_null(resourceLink.created);
+	                ok = (resourceLink.getCreated() != null);
 	            }
 	            if (ok) {
 	                if (doSaveResourceLink) {
-	                    this.resourceLink.save();
+	                    resourceLink.save();
 	                }
-	                this.resourceLink = resourceLink;
 	            } else {
-	                this.reason = "Unable to load resource link being shared.";
+	                reason = "Unable to load resource link being shared.";
 	            }
 	        }
 
@@ -1339,31 +1192,9 @@ public class ToolProvider {
 
 	    }
 
-	/**
-	 * Validate a parameter value from an array of permitted values.
-	 *
-	 * @return boolean True if value is valid
-	 */
-	    private function checkValue(value, values, reason)
-	    {
-
-	        ok = in_array(value, values);
-	        if (!ok && !empty(reason)) {
-	            this.reason = sprintf(reason, value);
-	        }
-
-	        return ok;
-
-	    }
-
-	public static BaseApi<OAuth10aService> instance() {
-		// TODO Auto-generated method stub
-		return null;
-	}
 
 	public ToolConsumer getConsumer() {
-		// TODO Auto-generated method stub
-		return null;
+		return this.consumer;
 	}
 
 	public Product getProduct() {

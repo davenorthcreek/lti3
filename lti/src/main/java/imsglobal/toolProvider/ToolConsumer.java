@@ -46,73 +46,73 @@ public class ToolConsumer implements LTISource {
 	 *
 	 * @var string name
 	 */
-	    public String name = null;
+	    private String name = null;
 	/**
 	 * Shared secret.
 	 *
 	 * @var string secret
 	 */
-	    public String secret = null;
+	    private String secret = null;
 	/**
 	 * LTI version (as reported by last tool consumer connection).
 	 *
 	 * @var string ltiVersion
 	 */
-	    public String ltiVersion = null;
+	    private String ltiVersion = null;
 	/**
 	 * Name of tool consumer (as reported by last tool consumer connection).
 	 *
 	 * @var string consumerName
 	 */
-	    public String consumerName = null;
+	    private String consumerName = null;
 	/**
 	 * Tool consumer version (as reported by last tool consumer connection).
 	 *
 	 * @var string consumerVersion
 	 */
-	    public String consumerVersion = null;
+	    private String consumerVersion = null;
 	/**
 	 * Tool consumer GUID (as reported by first tool consumer connection).
 	 *
 	 * @var string consumerGuid
 	 */
-	    public String consumerGuid = null;
+	    private String consumerGuid = null;
 	/**
 	 * Optional CSS path (as reported by last tool consumer connection).
 	 *
 	 * @var string cssPath
 	 */
-	    public String cssPath = null;
+	    private String cssPath = null;
 	/**
 	 * Whether the tool consumer instance is protected by matching the consumer_guid value in incoming requests.
 	 *
 	 * @var boolean protected
 	 */
-	    public boolean thisprotected = false;
+	    private boolean thisprotected = false;
 	/**
 	 * Whether the tool consumer instance is enabled to accept incoming connection requests.
 	 *
 	 * @var boolean enabled
 	 */
-	    public boolean enabled = false;
+	    private boolean enabled = false;
 	/**
 	 * Date/time from which the the tool consumer instance is enabled to accept incoming connection requests.
 	 *
 	 * @var int enableFrom
 	 */
-	    public DateTime enableFrom = null;
+	    private DateTime enableFrom = null;
 	/**
 	 * Date/time until which the tool consumer instance is enabled to accept incoming connection requests.
 	 *
 	 * @var int enableUntil
 	 */
-	    public DateTime enableUntil = null;
+	    private DateTime enableUntil = null;
 	/**
 	 * Date of last connection from this tool consumer.
 	 *
 	 * @var int lastAccess
 	 */
-	    public DateTime lastAccess = null;
+	    private DateTime lastAccess = null;
 	/**
 	 * Default scope to use when generating an Id value for a user.
 	 *
@@ -124,25 +124,25 @@ public class ToolConsumer implements LTISource {
 	 *
 	 * @var string defaultEmail
 	 */
-	    public String defaultEmail;
+	    private String defaultEmail;
 	/**
 	 * Setting values (LTI parameters, custom parameters and local parameters).
 	 *
 	 * @var array settings
 	 */
-	    public Map<String, List<String>> settings = new HashMap<String, List<String>>();
+	    private Map<String, List<String>> settings = new HashMap<String, List<String>>();
 	/**
 	 * Date/time when the object was created.
 	 *
 	 * @var int created
 	 */
-	    public DateTime created = null;
+	    private DateTime created = null;
 	/**
 	 * Date/time when the object was last updated.
 	 *
 	 * @var int updated
 	 */
-	    public DateTime updated = null;
+	    private DateTime updated = null;
 
 	/**
 	 * Consumer ID value.
@@ -920,7 +920,7 @@ public class ToolConsumer implements LTISource {
 		return DataConnectorFactory.getDataConnector();
 	}
 
-	public List<User> getUserResultSourcedIDs(boolean flag, int scope) {
+	public Map<String, User> getUserResultSourcedIDs(boolean flag, int scope) {
 		return getDataConnector().getUserResultSourcedIDsToolConsumer(this, flag, scope);
 	}
 	

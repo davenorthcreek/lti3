@@ -1,7 +1,9 @@
 package imsglobal.toolProvider.dataConnector;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.io.UnsupportedEncodingException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -11,6 +13,8 @@ import org.joda.time.DateTime;
 import imsglobal.toolProvider.ConsumerNonce;
 import imsglobal.toolProvider.Context;
 import imsglobal.toolProvider.ResourceLink;
+import imsglobal.toolProvider.ResourceLinkShare;
+import imsglobal.toolProvider.ResourceLinkShareKey;
 import imsglobal.toolProvider.ToolConsumer;
 import imsglobal.toolProvider.ToolProxy;
 import imsglobal.toolProvider.User;
@@ -378,10 +382,10 @@ public class DataConnector {
 	 *
 	 * @return array Array of User objects
 	 */
-	    public List<User> getUserResultSourcedIDsResourceLink(ResourceLink resourceLink, boolean localOnly, int ID_SCOPE)
+	    public Map<String, User> getUserResultSourcedIDsResourceLink(ResourceLink resourceLink, boolean localOnly, int ID_SCOPE)
 	    {
 
-	        return new ArrayList<User>();
+	        return new HashMap<String, User>();
 
 	    }
 
@@ -397,10 +401,10 @@ public class DataConnector {
 	 *
 	 * @return List List of User objects
 	 */
-	    public List<User> getUserResultSourcedIDsContext(Context context, boolean localOnly, int ID_SCOPE)
+	    public Map<String, User> getUserResultSourcedIDsContext(Context context, boolean localOnly, int ID_SCOPE)
 	    {
 
-	        return new ArrayList<User>();
+	        return new HashMap<String, User>();
 
 	    }
 
@@ -416,10 +420,10 @@ public class DataConnector {
 	 *
 	 * @return array Array of User objects
 	 */
-	    public List<User> getUserResultSourcedIDsToolConsumer(ToolConsumer consumer, boolean localOnly, int ID_SCOPE)
+	    public Map<String, User> getUserResultSourcedIDsToolConsumer(ToolConsumer consumer, boolean localOnly, int ID_SCOPE)
 	    {
 
-	        return new ArrayList<User>();
+	    	return new HashMap<String, User>();
 
 	    }
 
@@ -431,10 +435,10 @@ public class DataConnector {
 	 *
 	 * @return List of ResourceLinkShare objects
 	 */
-	    public List<ResourceLink> getSharesResourceLink(ResourceLink resourceLink)
+	    public List<ResourceLinkShare> getSharesResourceLink(ResourceLink resourceLink)
 	    {
-
-	        return new ArrayList<ResourceLink>();
+	    	//TODO probably should return something not empty here?
+	        return new ArrayList<ResourceLinkShare>();
 
 	    }
 
@@ -480,7 +484,7 @@ public class DataConnector {
 	 *
 	 * @return boolean True if the resource link share key object was successfully loaded
 	 */
-	    public boolean loadResourceLinkShareKey(String shareKey)
+	    public boolean loadResourceLinkShareKey(ResourceLinkShareKey shareKey)
 	    {
 
 	        return true;
@@ -494,7 +498,7 @@ public class DataConnector {
 	 *
 	 * @return boolean True if the resource link share key object was successfully saved
 	 */
-	    public boolean saveResourceLinkShareKey(String shareKey)
+	    public boolean saveResourceLinkShareKey(ResourceLinkShareKey shareKey)
 	    {
 
 	        return true;
@@ -508,7 +512,7 @@ public class DataConnector {
 	 *
 	 * @return boolean True if the resource link share key object was successfully deleted
 	 */
-	    public boolean deleteResourceLinkShareKey(String shareKey)
+	    public boolean deleteResourceLinkShareKey(ResourceLinkShareKey shareKey)
 	    {
 
 	        return true;

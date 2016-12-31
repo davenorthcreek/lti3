@@ -86,7 +86,7 @@ public class Membership extends Service {
 	            //still null
 	        } else {
 	            users = new ArrayList<User>();
-	            List<User> oldUserIds = new ArrayList<User>();
+	            Map<String, User> oldUserIds = new HashMap<String, User>();
 	            if (isLink) {
 	                oldUserIds = this.source.getUserResultSourcedIDs(true, ToolProvider.ID_SCOPE_RESOURCE);
 	            }
@@ -97,7 +97,7 @@ public class Membership extends Service {
 	            	User user = new User();
 	                //User member = membership.get("member");
 	                if (isLink) {
-	                    user = User.fromResourceLink(this.source, member.get("userId"));
+	                    user = User.fromResourceLink((ResourceLink)source, member.get("userId"));
 	                } else {
 	                    user.setLtiUserId(member.get("userId"));
 	                }
@@ -110,7 +110,7 @@ public class Membership extends Service {
 
 	// Set the user email
 	                String email = (member.containsKey("email")) ? member.get("email") : "";
-	                user.setEmail(email, this.source.getConsumer().defaultEmail);
+	                user.setEmail(email, this.source.getConsumer().getDefaultEmail());
 
 	// Set the user roles
 	                if (member.containsKey("role")) {
@@ -141,7 +141,7 @@ public class Membership extends Service {
 
 	// Delete any old users which were not in the latest list from the tool consumer
 	            if (isLink) {
-	                for (User userToDelete : oldUserIds) {
+	                for (User userToDelete : oldUserIds.values()) {
 	                    userToDelete.delete();
 	                }
 	            }
