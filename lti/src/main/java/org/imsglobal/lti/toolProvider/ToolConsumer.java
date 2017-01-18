@@ -1,7 +1,9 @@
 package org.imsglobal.lti.toolProvider;
 
+import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -9,15 +11,18 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
 import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.ClientProtocolException;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.imsglobal.lti.LTIMessage;
+import org.imsglobal.lti.LTIUtil;
 import org.imsglobal.lti.profile.ServiceDefinition;
-import org.imsglobal.lti.signature.oauth1.OAuthConsumer;
-import org.imsglobal.lti.signature.oauth1.OAuthException;
-import org.imsglobal.lti.signature.oauth1.OAuthRequest;
-import org.imsglobal.lti.signature.oauth1.OAuthSignatureMethod;
-import org.imsglobal.lti.signature.oauth1.OAuthSignatureMethod_HMAC_SHA1;
 import org.imsglobal.lti.signature.oauth1.OAuthUtil;
 import org.imsglobal.lti.toolProvider.dataConnector.DataConnector;
 import org.imsglobal.lti.toolProvider.dataConnector.DataConnectorFactory;
@@ -27,6 +32,19 @@ import org.imsglobal.lti.toolProvider.service.Service;
 import org.imsglobal.lti.toolProvider.service.ToolSettings;
 import org.joda.time.DateTime;
 import org.json.simple.JSONObject;
+
+import net.oauth.OAuthAccessor;
+import net.oauth.OAuthConsumer;
+import net.oauth.OAuthException;
+import net.oauth.signature.OAuthSignatureMethod;
+import net.oauth.server.OAuthServlet;
+import net.oauth.server.HttpRequestMessage;
+import net.oauth.OAuthMessage;
+import net.oauth.OAuthValidator;
+import net.oauth.SimpleOAuthValidator;
+import net.oauth.signature.HMAC_SHA1;
+
+
 
 /**
  * Class to represent a tool consumer
@@ -327,6 +345,10 @@ public class ToolConsumer implements LTISource {
 			return key;
 		}
 	
+		public void setProfile(ConsumerProfile profile) {
+			this.profile = profile;
+		}
+
 		public void setDataConnector(DataConnector dataConnector) {
 			this.dataConnector = dataConnector;
 		}
@@ -633,6 +655,28 @@ public class ToolConsumer implements LTISource {
 	        return response.isOk();
 
 	    }
+	    
+	    private static List<Entry<String, String>> convert(Map<String, List<String>> params) {
+	    	List<Map.Entry<String, String>> theList = new ArrayList<Map.Entry<String, String>>();
+	    	for (String k : params.keySet()) {
+	    		for (String v : params.get(k)) {
+	    			Map<String, String> temp = new HashMap<String, String>();
+	    			temp.put(k, v);
+	    			for (Entry<String, String> e : temp.entrySet()) {
+	    				theList.add(e);
+	    			}
+	    		}
+	    	}
+	    	return theList;
+	    }
+	    
+	    private static Map<String, List<String>> convertBack(List<Entry<String, String>> oparams) {
+	    	Map<String, List<String>> params = new HashMap<String, List<String>>();
+	    	for (Entry<String, String> e : oparams) {
+	    		LTIUtil.setParameter(params, e.getKey(), e.getValue());
+	    	}
+	    	return params;
+	    }
 
 	/**
 	 * Add the OAuth signature to an LTI message.
@@ -644,45 +688,53 @@ public class ToolConsumer implements LTISource {
 	 *
 	 * @return array Array of signed message parameters
 	 */
-	    public Map<String, List<String>> signParameters(String urlString, String type, String version, Map<String, List<String>> params)
+	    public Map<String, List<String>> signParameters(
+	    		String urlString, 
+	    		String type, 
+	    		String version, 
+	    		Map<String, List<String>> params)
 	    {
+	    	List<Entry<String, String>> oparams = new ArrayList<Entry<String, String>>();
 	    	if (urlString != null) {
 	// Check for query parameters which need to be included in the signature
 	    		try {
 	    			URL url = new URL(urlString);
-		            String query = url.getQuery();
-		            Map<String, List<String>> paramList = OAuthUtil.parse_parameters(url.getQuery());
+		            Map<String, List<String>> queryParams = OAuthUtil.parse_parameters(url.getQuery());
 		
-		            params.putAll(paramList);
+		            params.putAll(queryParams);
 		            
 		            // Add standard parameters
-		            OAuthRequest req = new OAuthRequest("POST", url);
-		            req.setParameter(params, "lti_version", version);
-		            req.setParameter(params, "lti_message_type", type);
-		            req.setParameter(params, "oauth_callback", "about:blank");
+
+	            	LTIUtil.setParameter(params, "lti_version", version);
+		            LTIUtil.setParameter(params, "lti_message_type", type);
+		            LTIUtil.setParameter(params, "oauth_callback", "about:blank");
 		            
-		// Add OAuth signature
-		            OAuthSignatureMethod hmacMethod = new OAuthSignatureMethod_HMAC_SHA1();
-		            OAuthConsumer consumer = new OAuthConsumer(this.getKey(), this.getSecret(), null);
-		            req = req.from_consumer_and_token(consumer, null, "POST", url, params);
-		            //                                consumer, token, method, url, params
+		            oparams = convert(params);
+
 		            
-		            req.sign_request(hmacMethod, consumer, null);
-		            params = req.get_parameters();
+		// Add OAuth signature     
+					OAuthMessage message = doSignature(urlString, oparams, getKey(), getSecret());
+					oparams = message.getParameters(); //replace with signed parameters
 		// Remove parameters being passed on the query string
-		            for (String name : paramList.keySet()) {
-		                params.remove(name);
-		            }
+					oparams = removeQueryParams(oparams, queryParams);
 	    		} catch (MalformedURLException e) {
 					e.printStackTrace();
 				} catch (UnsupportedEncodingException e) {
 					e.printStackTrace();
+				} catch (IOException e1) {
+					e1.printStackTrace();
+				} catch (OAuthException e1) {
+					e1.printStackTrace();
+				} catch (URISyntaxException e1) { 
+					e1.printStackTrace();
 				}
 	        }
 
-	        return params;
+	        return convertBack(oparams);
 
 	    }
+
+
 
 	/**
 	 * Add the OAuth signature to an array of message parameters or to a header string.
@@ -697,38 +749,46 @@ public class ToolConsumer implements LTISource {
 	    		String method, 
 	    		String type)
 	    {
-
+	    	List<Entry<String, String>> oparams = new ArrayList<Entry<String, String>>();
 	    	Map<String, List<String>> params = new HashMap<String, List<String>>();
 	        if (data != null) {
 	            params = data;
 	        }
+	        if (StringUtils.isEmpty(method)) {
+	        	method = "POST";
+	        }
 	        // Check for query parameters which need to be included in the signature
-			try {
+	        try {
 				URL url = new URL(endpoint);
-				Map<String, List<String>>paramList = OAuthUtil.parse_parameters(url.getQuery());
-	            params.putAll(paramList);
-			
-		        OAuthRequest req = new OAuthRequest(method, url);
-		// Add OAuth signature
-		        OAuthSignatureMethod hmacMethod = new OAuthSignatureMethod_HMAC_SHA1();
-		        OAuthConsumer oauthConsumer = new OAuthConsumer(consumerKey, consumerSecret, null);
-		        OAuthRequest oauthReq = req.from_consumer_and_token(oauthConsumer, null, method, url, params);
-		        oauthReq.sign_request(hmacMethod, oauthConsumer, null);
-		        params = oauthReq.get_parameters();
-		// Remove parameters being passed on the query string
-		        for (String key : paramList.keySet()) {
-		        	params.remove(key);
-		        }
-		        
+				Map<String, List<String>> queryParams = OAuthUtil.parse_parameters(url.getQuery());
+			    params.putAll(queryParams);
+			    
+			    oparams = convert(params);
+			    
+	// Add OAuth signature
+			    OAuthMessage message = doSignature(endpoint, oparams, consumerKey, consumerSecret);
+			    oparams = message.getParameters();
+			    
+	// Remove parameters being passed on the query string
+				oparams = removeQueryParams(oparams, queryParams);
+			    
 			} catch (MalformedURLException e) {
 				e.printStackTrace();
 			} catch (UnsupportedEncodingException e) {
 				e.printStackTrace();
+			} catch (IOException e1) {
+				e1.printStackTrace();
+			} catch (OAuthException e1) {
+				e1.printStackTrace();
+			} catch (URISyntaxException e1) {
+				e1.printStackTrace();
 			}
-
-	        return params;
+	        
+	        return convertBack(oparams);
         	
 	    }
+
+	
 	    
 	    public static String addSignature(
 	    		String endpoint, 
@@ -738,15 +798,15 @@ public class ToolConsumer implements LTISource {
 	    		String method, 
 	    		String type)
 	    {
-	    	
+	    	List<Entry<String, String>> oparams = new ArrayList<Entry<String, String>>();
 	    	Map<String, List<String>> params = new HashMap<String, List<String>>();
 	    	URL url;
-	        Map<String, List<String>> paramList = new HashMap<String, List<String>>();
-	        String header = "";
+	        Map<String, List<String>> queryParams = new HashMap<String, List<String>>();
+	        List<Entry<String, String>> headers = new ArrayList<Entry<String, String>>();
 			try {
 				url = new URL(endpoint);
-				paramList = OAuthUtil.parse_parameters(url.getQuery());
-	            params.putAll(paramList);
+				queryParams = OAuthUtil.parse_parameters(url.getQuery());
+	            params.putAll(queryParams);
 			
 		// Calculate body hash
 		    	MessageDigest md = MessageDigest.getInstance("SHA1");
@@ -755,40 +815,97 @@ public class ToolConsumer implements LTISource {
 		        List<String> hashList = new ArrayList<String>();
 		        hashList.add(hash);
 		        params.put("oauth_body_hash", hashList);
-				
-				OAuthRequest req = new OAuthRequest(method, url);
+		        
+		        oparams = convert(params);
+
 		// Add OAuth signature
-		        OAuthSignatureMethod hmacMethod = new OAuthSignatureMethod_HMAC_SHA1();
-		        OAuthConsumer oauthConsumer = new OAuthConsumer(consumerKey, consumerSecret, null);
-		        OAuthRequest oauthReq = req.from_consumer_and_token(oauthConsumer, null, method, url, params);
-		        oauthReq.sign_request(hmacMethod, oauthConsumer, null);
-		        params = oauthReq.get_parameters();
+		        OAuthMessage message = doSignature(endpoint, oparams, consumerKey, consumerSecret);
+		        
 		// Remove parameters being passed on the query string
-		        for (String key : paramList.keySet()) {
-		        	params.remove(key);
-		        }
+				oparams = removeQueryParams(message.getParameters(), queryParams);
 					    	
-	            header = oauthReq.to_header(null);
-		        if (data == null || data.equals("")) {
+	            headers = message.getHeaders();
+		        if (StringUtils.isEmpty(data)) {
 		        	if (type != null) {
-		                header += "\nAccept: {" + type + "}";
+		        		headers = addHeader(headers, "Accept", type);
 		            }
-	            } else if (type != null && !type.equals("")) {
-		            header += "\nContent-Type: {" + type + "}";
-	                header += "\nContent-Length: " + data.length();
+	            } else if (StringUtils.isNotEmpty(type)) {
+	            	headers = addHeader(headers, "Content-Type", type);
+	            	headers = addHeader(headers, "Content-Length", String.valueOf(data.length()));
 	            }
 			} catch (MalformedURLException e) {
 				e.printStackTrace();
 			} catch (UnsupportedEncodingException e) {
 				e.printStackTrace();
+			} catch (NoSuchAlgorithmException e) {
+				e.printStackTrace();
+			} catch (IOException e) {
+				e.printStackTrace();
 			} catch (OAuthException e) {
 				e.printStackTrace();
-			} catch (NoSuchAlgorithmException e) {
+			} catch (URISyntaxException e) {
 				e.printStackTrace();
 			}
 			
-            return header;
+            return convertHeader(headers);
 	    }
+	    
+	    private static List<Entry<String, String>> addHeader(
+	    		List<Entry<String, String>> headers,
+	    		String key,
+	    		String value) {
+	    	HashMap<String, String> temp = new HashMap<String, String>();
+	    	temp.put(key, value);
+	    	for (Entry<String, String> e : temp.entrySet()) {
+	    		headers.add(e);
+	    	}
+	    	return headers;
+	    }
+	    
+	    private static String convertHeader(List<Entry<String, String>> headers) {
+	    	StringBuilder sb = new StringBuilder();
+	    	for (Entry<String, String> e : headers) {
+	    		sb.append("\n")
+   				.append(e.getKey())
+   				.append(": {")
+   				.append(e.getValue())
+   				.append("}");
+	    	}
+	    	return sb.toString();
+	    }
+	    
+		private static OAuthMessage doSignature(
+				String urlString, 
+				List<Entry<String, String>> oparams,
+				String key,
+				String secret)
+				throws IOException, OAuthException, URISyntaxException {
+			
+			OAuthConsumer oAuthConsumer = new OAuthConsumer("about:blank", key, secret, null);
+			OAuthAccessor oAuthAccessor = new OAuthAccessor(oAuthConsumer);
+			OAuthMessage message = new OAuthMessage("POST", urlString, oparams);
+			message.sign(oAuthAccessor);
+			return message;
+		}
+
+		private static List<Entry<String, String>> removeQueryParams(
+				List<Entry<String, String>> oparams,
+				Map<String, List<String>> queryParams)
+		{
+			List<Entry<String, String>> oparams2 = new ArrayList<Entry<String, String>>();
+			for (Entry<String, String> e : oparams) {
+				boolean copy = true;
+				if (queryParams.containsKey(e.getKey())) {
+					if (queryParams.get(e.getKey()).equals(e.getValue())) {
+						copy = false;
+					}
+				}
+				if (copy) {
+					oparams2.add(e);
+				}
+			}
+			return oparams2;
+		}
 
 	/**
 	 * Perform a service request

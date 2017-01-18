@@ -1,4 +1,4 @@
-package org.imsglobal.lti.data.sql;
+package org.imsglobal.lti.toolProvider.dataConnector;
 
 import java.sql.Connection;
 import java.sql.Date;
@@ -18,7 +18,6 @@ import org.imsglobal.lti.toolProvider.ResourceLinkShareKey;
 import org.imsglobal.lti.toolProvider.ToolConsumer;
 import org.imsglobal.lti.toolProvider.ToolProvider;
 import org.imsglobal.lti.toolProvider.User;
-import org.imsglobal.lti.toolProvider.dataConnector.DataConnector;
 import org.joda.time.DateTime;
 
 import com.google.gson.Gson;

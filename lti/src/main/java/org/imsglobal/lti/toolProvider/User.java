@@ -207,7 +207,7 @@ public class User {
         this.fullname = "";
         this.email = "";
         try {
-			this.image = new URL("");
+			this.setImage(new URL(""));
 		} catch (MalformedURLException e) {
 			e.printStackTrace();
 		}
@@ -622,4 +622,12 @@ public class User {
 	      return value.toString();
 
 	    }
+
+	public URL getImage() {
+		return image;
+	}
+
+	public void setImage(URL image) {
+		this.image = image;
+	}
 }

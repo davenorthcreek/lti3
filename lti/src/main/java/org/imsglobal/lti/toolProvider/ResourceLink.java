@@ -971,14 +971,14 @@ public class ResourceLink implements LTISource {
  *
  * @return mixed The array of settings if successful, otherwise false
  */
-    public Map<String, String> getToolSettings() {
+    public Map<String, List<String>> getToolSettings() {
     	return getToolSettings(ToolSettings.MODE_CURRENT_LEVEL, true);
     }
-    public Map<String, String> getToolSettings(int mode) {
+    public Map<String, List<String>> getToolSettings(int mode) {
     	return getToolSettings(mode, true);
     }
     
-    public Map<String, String> getToolSettings(int mode, boolean simple)
+    public Map<String, List<String>> getToolSettings(int mode, boolean simple)
     {
 
         String url = this.getSetting("custom_link_setting_url");

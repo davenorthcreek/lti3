@@ -2,6 +2,7 @@ package org.imsglobal.lti.toolProvider.mediaType;
 
 import java.util.List;
 
+import org.imsglobal.lti.product.Product;
 import org.imsglobal.lti.profile.ServiceDefinition;
 
 public class ConsumerProfile {
@@ -9,6 +10,7 @@ public class ConsumerProfile {
 	private List<JSONContext> contexts;
 	private List<ServiceDefinition> servicesOffered;
 	private String id;
+	private Product product;
 	
 	public ConsumerProfile() {
 		
@@ -44,6 +46,19 @@ public class ConsumerProfile {
 
 	public List<ServiceDefinition> getServicesOffered() {
 		return servicesOffered;
+	}
+
+	public List<String> getCapabilityOffered() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	public Product getProduct() {
+		return product;
+	}
+
+	public void setProduct(Product product) {
+		this.product = product;
 	}
 	
 	

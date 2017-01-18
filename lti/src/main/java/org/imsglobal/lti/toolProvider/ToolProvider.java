@@ -4,9 +4,10 @@ import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.MalformedURLException;
+import java.net.URISyntaxException;
 import java.net.URL;
-import java.net.URLEncoder;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -19,15 +20,28 @@ import javax.servlet.http.HttpServletResponse;
 
 import org.apache.commons.lang3.StringEscapeUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.ClientProtocolException;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.utils.URIBuilder;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.util.EntityUtils;
 import org.imsglobal.lti.LTIMessage;
+import org.imsglobal.lti.LTIUtil;
 import org.imsglobal.lti.product.Product;
 import org.imsglobal.lti.product.ProductFamily;
+import org.imsglobal.lti.profile.ProfileMessage;
 import org.imsglobal.lti.profile.ProfileResourceHandler;
 import org.imsglobal.lti.profile.ServiceDefinition;
 import org.imsglobal.lti.toolProvider.dataConnector.DataConnector;
+import org.imsglobal.lti.toolProvider.mediaType.ConsumerProfile;
+import org.imsglobal.lti.toolProvider.mediaType.JSONContext;
 import org.imsglobal.lti.toolProvider.mediaType.ToolProxy;
 import org.imsglobal.lti.toolProvider.mediaType.ToolService;
 import org.joda.time.DateTime;
+import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
 
 import net.oauth.OAuthAccessor;
 import net.oauth.OAuthConsumer;
@@ -35,6 +49,7 @@ import net.oauth.OAuthMessage;
 import net.oauth.OAuthValidator;
 import net.oauth.SimpleOAuthValidator;
 import net.oauth.server.OAuthServlet;
+import net.oauth.signature.OAuthSignatureMethod;
 
 public class ToolProvider {
 	
@@ -85,7 +100,8 @@ public class ToolProvider {
 	/**
 	 * Permitted LTI versions for messages.
 	 */
-	    private static String[] LTI_VERSIONS = {LTI_VERSION1, LTI_VERSION2};
+	    private static final List<String> LTI_VERSIONS = Arrays.asList(LTI_VERSION1, LTI_VERSION2);
+	    
 	/**
 	 * List of supported message types and associated class methods.
 	 */
@@ -316,13 +332,13 @@ public class ToolProvider {
 	 *
 	 * @var string mediaTypes
 	 */
-	    private String mediaTypes = null;
+	    private Set<String> mediaTypes = new HashSet<String>();
 	/**
-	 * URL to redirect user to on successful completion of the request.
+	 * target for new document to be displayed
 	 *
 	 * @var string documentTargets
 	 */
-	    private String documentTargets = null;
+	    private Set<String> documentTargets = new HashSet<String>();
 	/**
 	 * HTML to be displayed on a successful completion of the request.
 	 *
@@ -348,12 +364,6 @@ public class ToolProvider {
       private String error = null;
 
 	/**
-	 * Callback functions for handling requests.
-	 *
-	 * @var array callbackHandler
-	 */
-	    private Map<String, Callback> callbackHandlers = new HashMap<String, Callback>();
-	/**
 	 * LTI parameter constraints for auto validation checks.
 	 *
 	 * @var array constraints
@@ -366,20 +376,6 @@ public class ToolProvider {
 	    
 	    private HttpServletRequest request;
 	    private HttpServletResponse response;
-
-	    
-	    /*  Probably not needed
-	    private JSONObject requestParamsToJSON(HttpRequest req) {
-      	  JSONObject jsonObj = new JSONObject();
-      	  Map<String,String[]> params = req.getParameterMap();
-      	  for (Map.Entry<String,String[]> entry : params.entrySet()) {
-      	    String v[] = entry.getValue();
-      	    Object o = (v.length == 1) ? v[0] : v;
-      	    jsonObj.put(entry.getKey(), o);
-      	  }
-      	  return jsonObj;
-      	}
-      	*/
       	
 	/**
 	 * Class constructor
@@ -392,7 +388,7 @@ public class ToolProvider {
 	        ok = (dataConnector != null);
 	        this.request = request;
 	        this.response = response;
-	        //JSONObject reqJSON = requestParamsToJSON(request);
+	        
 
 	// Set debug mode
 	        String customDebug = request.getParameter("custom_debug");
@@ -719,7 +715,7 @@ public class ToolProvider {
 						e.printStackTrace();
 					} //returns a boolean
 	        }
-	        if (!methodExists) { //didn't find the method in declared methods
+	        if (!methodExists) { //didn"t find the method in declared methods
 	        	if (StringUtils.isNotEmpty(method) && ok) {
 	        		ok = false;
 	        		reason = "Message type not supported: " + getMessageType();
@@ -742,60 +738,87 @@ public class ToolProvider {
 	 */
 	    private void result()
 	    {
-	    	boolean processed = false;
-	    	if (!this.ok && this.callbackHandlers.containsKey("error")) {
-	    	      Callback callbackHandler = this.callbackHandlers.get("error");
-	    	      processed = callbackHandler.execute(this);
-	    	    }
-	    	    if (!processed) {
-	    	      processed = true;
-	    	      try {
-	    	        if (!this.ok) {
-	    	//
-	    	/// If not valid, return an error message to the tool consumer if a return URL is provided
-	    	//
-	    	          if (this.returnUrl != null) {
-	    	            this.error = this.returnUrl.toExternalForm();
-	    	            if (this.error.indexOf("?") >= 0) {
-	    	              this.error += '&';
-	    	            } else {
-	    	              this.error += '?';
-	    	            }
-	    	            if (this.debugMode && (this.reason != null)) {
-	    	              this.error += "lti_errormsg=" + URLEncoder.encode("Debug error: " + this.reason, "UTF-8");
-	    	            } else {
-	    	              this.error += "lti_errormsg=" + URLEncoder.encode(this.message, "UTF-8");
-	    	              if (this.reason != null) {
-	    	                this.error += "&lti_errorlog=" + URLEncoder.encode("Debug error: " + this.reason, "UTF-8");
-	    	              }
-	    	            }
-	    	          } else if (this.debugMode) {
-	    	            this.error = this.reason;
-	    	          }
-	    	          if (this.error == null) {
-	    	            this.error = this.message;
-	    	          }
-	    	          if (this.error.startsWith("http://") || this.error.startsWith("https://")) {
-	    	            this.response.sendRedirect(this.error);
-	    	          } else {
-	    	            processed = false;
-	    	          }
-	    	        } else if (this.redirectUrl != null) {
-	    	          this.response.sendRedirect(this.redirectUrl.toExternalForm());
-	    	        } else if (this.returnUrl != null) {
-	    	          this.response.sendRedirect(this.returnUrl.toExternalForm());
-	    	        } else {
-	    	          processed = false;
-	    	        }
-	    	        if (!processed) {
-	    	          this.response.sendError(401, this.error);
-	    	        }
-	    	      } catch (IOException e) {
-	    	    	  e.printStackTrace();
-	    	      }
-	    	    }
-
-	    	  }
+	    	if (!ok) {
+	    		ok = onError();
+	    	}
+	    	if (!ok) {
+	    		try {
+		    		if (returnUrl != null) {
+		    			URIBuilder errorUrlBuilder = new URIBuilder(returnUrl.toExternalForm());
+		    			//add necessary query parameters to error url
+		    			//first, figure out if we know the reason
+		    			HashMap<String, String> params = new HashMap<String, String>();
+			    		if (debugMode && StringUtils.isNotEmpty(reason)) {
+			    			params.put("lti_errormsg", "Debug error: "+reason);
+			    		} else {
+			    			params.put("lti_errormsg", message);
+			    			if (StringUtils.isNotEmpty(reason)) {
+			    				params.put("lti_errorlog", "Debug error: " + reason);
+			    			}
+			    		}
+		    			for (String key : params.keySet()) {
+		    				errorUrlBuilder.addParameter(key, params.get(key));
+		    			}
+			    		URL errorUrl;
+					
+						errorUrl = errorUrlBuilder.build().toURL();
+					
+			    		if (consumer != null && request != null) {
+			    			String ltiMessageType = request.getParameter("lti_message_type");
+			    			if (ltiMessageType.equals("ContentItemSelectionRequest")) {
+			    				String version = request.getParameter("lti_version");
+			    				if (version == null) {
+			    					version = LTI_VERSION1;
+			    				}
+			    				Map<String, List<String>> toSend = new HashMap<String, List<String>>();
+								Map<String, String[]> formParams = request.getParameterMap();
+			    				for (String key : formParams.keySet()) {
+			    					for (String v : formParams.get(key)) {
+			    						LTIUtil.setParameter(toSend, key, v);
+			    					}
+			    				}
+			    				Map<String, List<String>> signedParams = 
+			    						consumer.signParameters(
+			    								errorUrl.toExternalForm(), 
+			    								"ContentItemSelection", 
+			    								version, 
+			    								toSend);
+			    				String page = sendForm(errorUrl, signedParams);
+			    				System.out.print(page);
+			    			} 
+			    		} else {
+			    			try {
+			    				response.sendRedirect(errorUrl.toExternalForm());
+			    			} catch (IOException ioe) {
+			    				return;
+			    			}
+			    		}
+			    		return;
+			   		} else {
+			   			if (errorOutput != null) {
+			   				System.err.println(errorOutput);
+			   			} else if (debugMode && StringUtils.isNotEmpty(reason)) {
+			   				System.err.println("Debug error: " + reason);
+			   			} else {
+			   				System.err.println("Error: " + message);
+		    	        }
+			   		}
+	    		} catch (MalformedURLException e) {
+					e.printStackTrace();
+				} catch (URISyntaxException e) {
+					e.printStackTrace();
+				}	
+		   	} else if (this.redirectUrl != null) {
+		   		try {
+		   			this.response.sendRedirect(this.redirectUrl.toExternalForm());
+		   		} catch (IOException ioe) {
+		   			return;
+		   		}
+		   		return;
+		   	} else if (output != null) {
+		   		System.out.println(output);
+		   	}
+	    }
 	   
 
 	/**
@@ -807,298 +830,641 @@ public class ToolProvider {
 	 */
 	    private boolean authenticate()
 	    {
+	    	boolean doSaveConsumer = false;
+	    	//JSON Initialization
+	    	JSONParser parser = new JSONParser();
+    		JSONObject tcProfile = null;
+    		
+	    	String messageType = request.getParameter("lti_message_type");
+	    	ok = (StringUtils.isNotEmpty(messageType) && MESSAGE_TYPES.containsKey(messageType));
+	    	if (!ok) {
+	    		reason = "Invalid or missing lti_message_type parameter.";
+	    	}
+	    	if (ok) {
+	    		String version = request.getParameter("lti_version");
+	    		ok = (StringUtils.isNotEmpty(version)) &&
+	    		     (LTI_VERSIONS.contains(version));
+	    		if (!ok) {
+	    			reason = "Invalid or missing lti_version parameter.";
+	    		}
+	    	}
+	    	if (ok) {
+	    		if (messageType.equals("basic-lti-launch-request")) {
+	    			String resLinkId = request.getParameter("resource_link_id");
+	    			ok = (StringUtils.isNotEmpty(resLinkId));
+	    			if (!ok) {
+	    				reason = "Missing resource link ID.";
+	    			}
+	    		} else if (messageType.equals("ContentItemSelectionRequest")) {
+	    			String accept = request.getParameter("accept_media_types");
+	    			ok = (StringUtils.isNotEmpty(accept));
+	    			if (ok) {
+		    			String[] mediaTypes = StringUtils.split(accept, ",");
+		    			Set<String> mTypes = new HashSet<String>();
+		    			for (String m : mediaTypes) {
+		    				mTypes.add(m); //unique set of media types, no repeats
+		    			}
+		    			ok = mTypes.size() > 0;
+		    			if (!ok) {
+		    				reason = "No accept_media_types found.";
+		    			} else {
+		    				this.mediaTypes = mTypes;
+		    			}
+	    			} else { //no accept 
+	    				ok = false;
+	    			}
+	    			String targets = request.getParameter("accept_presentation_document_targets");
+	    			if (ok && StringUtils.isNotEmpty(targets)) {
+	    				Set<String> documentTargets = new HashSet<String>();
+	    				for (String t : StringUtils.split(targets, ",")) {
+	    					documentTargets.add(t);
+	    				}
+	    				ok = documentTargets.size() > 0;
+	    				if (!ok) {
+	    					reason = "Missing or empty accept_presentation_document_targets parameter.";
+	    				} else {
+	    					List<String> valid = Arrays.asList("embed", "frame", "iframe", "window", "popup", "overlay", "none");
+	    					boolean thisCheck = true;
+	    					String problem = "";
+	    					for (String target : documentTargets) {
+	    						thisCheck = valid.contains(target);
+	    						if (!thisCheck) {
+	    							problem = target;
+	    							break;
+	    						}
+	    					}
+	    					if (!thisCheck) {
+	    						reason = "Invalid value in accept_presentation_document_targets parameter: " + problem;
+	    					}
+	    				}
+	    				if (ok) {
+	    					this.documentTargets = documentTargets;
+	    				}
+	    			} else {
+	    				ok = false;
+	    			}
+	    			if (ok) {
+	    				String ciReturnUrl = request.getParameter("content_item_return_url");
+	    				ok = StringUtils.isNotEmpty(ciReturnUrl);
+	    				if (!ok) {
+	    					reason = "Missing content_item_return_url parameter.";
+	    				}
+	    			}
+	    		} else if (messageType.equals("ToolProxyRegistrationRequest")) {
+	    			String regKey = request.getParameter("reg_key");
+	    			String regPass = request.getParameter("reg_password");
+	    			String profileUrl = request.getParameter("tc_profile_url");
+	    			String launchReturnUrl = request.getParameter("launch_presentation_return_url");
+	    			ok = StringUtils.isNotEmpty(regKey) && StringUtils.isNotEmpty(regPass)
+	    					&& StringUtils.isNotEmpty(profileUrl) && StringUtils.isNotEmpty(launchReturnUrl);
+	    			if (debugMode && !ok) {
+	    				reason = "Missing message parameters.";
+	    			}
+	    		}
+	    	}
+	    	DateTime now = DateTime.now();
+	    	//check consumer key
+	    	if (ok && !messageType.equals("ToolProxyRegistrationRequest")) {
+	    		String key = request.getParameter("oauth_consumer_key");
+	    		ok = StringUtils.isNotEmpty(key);
+	    		if (!ok) {
+	    			reason = "Missing consumer key.";
+	    		}
+	    		if (ok) {
+	    			this.consumer = new ToolConsumer(key, dataConnector);
+	    			ok = consumer.getCreated() != null;
+	    			if (!ok) {
+	    				reason = "Invalid consumer key.";
+	    			}
+	    		}
+	    		if (ok) {
+	    			if (consumer.getLastAccess() == null) {
+	    				doSaveConsumer = true;
+	    			} else {
+	    				DateTime last = consumer.getLastAccess();
+	    				doSaveConsumer = doSaveConsumer || 
+	    						last.isBefore(now.withTimeAtStartOfDay());
+	    			}
+	    			consumer.setLastAccess(now);
+	    			String baseString = "";
+	    			String signature = "";
+	    			try {
+						OAuthConsumer oAuthConsumer = new OAuthConsumer("about:blank", consumer.getKey(), consumer.getSecret(), null);
+						OAuthAccessor oAuthAccessor = new OAuthAccessor(oAuthConsumer);
+						OAuthValidator oAuthValidator = new SimpleOAuthValidator();
+						OAuthMessage oAuthMessage = OAuthServlet.getMessage(request, null);
+						oAuthValidator.validateMessage(oAuthMessage, oAuthAccessor);
+						signature = oAuthMessage.getSignature();
+						baseString = OAuthSignatureMethod.getBaseString(oAuthMessage);
+					} catch (Exception e) {
+						this.ok = false;
+						if (StringUtils.isEmpty(reason)) {
+							if (debugMode) {
+								reason = e.getMessage();
+								if (StringUtils.isEmpty(reason)) {
+									reason = "OAuth exception.";
+								}
+								details.add("Timestamp: " + DateTime.now().toString());
+	                            details.add("Signature: " + signature);
+	                            details.add("Base string: " + baseString);
+							} else {
+								reason = "OAuth signature check failed - perhaps an incorrect secret or timestamp.";
+							}
+						}
+					}
+	    		}
+	    		if (ok) {
+	    			DateTime today = DateTime.now();
+	    			if (consumer.getLastAccess() == null) {
+	    				doSaveConsumer = true;
+	    			} else {
+	    				DateTime last = consumer.getLastAccess();
+	    				doSaveConsumer = doSaveConsumer || last.isBefore(today.withTimeAtStartOfDay());
+	    			}
+	    			consumer.setLastAccess(today);
+	    			if (consumer.isThisprotected()) {
+	    				String guid = request.getParameter("tool_consumer_instance_guid");
+	    				if (StringUtils.isNotEmpty(consumer.getConsumerGuid())) {
+	                        ok = StringUtils.isEmpty(guid) || consumer.getConsumerGuid().equals(guid);
+	                        if (!ok) {
+	                            reason = "Request is from an invalid tool consumer.";
+	                        }
+	                    } else {
+	                        ok = StringUtils.isEmpty(guid);
+	                        if (!ok) {
+	                            reason = "A tool consumer GUID must be included in the launch request.";
+	                        }
+	                    }
+	                }
+	                if (ok) {
+	                    ok = consumer.isEnabled();
+	                    if (!ok) {
+	                        reason = "Tool consumer has not been enabled by the tool provider.";
+	                    }
+	                }
+	                if (ok) {
+	                    ok = consumer.getEnableFrom() == null || consumer.getEnableFrom().isBefore(today);
+	                    if (ok) {
+	                        ok = consumer.getEnableUntil() == null || consumer.getEnableUntil().isAfter(today);
+	                        if (!ok) {
+	                            reason = "Tool consumer access has expired.";
+	                        }
+	                    } else {
+	                        reason = "Tool consumer access is not yet available.";
+	                    }
+	                }
+	            }
 
-//
-/// Set debug mode
-//
-    this.debugMode = (this.request.getParameter("custom_debug") != null) &&
-       this.request.getParameter("custom_debug").equalsIgnoreCase("true");
-//
-/// Get the consumer
-//
-    boolean doSaveConsumer = false;
-// Check all required launch parameters
-    this.ok = this.request.getParameter("oauth_consumer_key") != null;
-    if (this.ok) {
-      this.ok = (this.request.getParameter("lti_message_type") != null) &&
-         this.request.getParameter("lti_message_type").equals("basic-lti-launch-request");
-    }
-    if (this.ok) {
-      this.ok = (this.request.getParameter("lti_version") != null) &&
-         (this.request.getParameter("lti_version").equals(LTI_VERSION1) ||
-          this.request.getParameter("lti_version").equals(LTI_VERSION2));
-    }
-    if (this.ok) {
-      this.ok = (this.request.getParameter("resource_link_id") != null) &&
-         this.request.getParameter("resource_link_id").trim().length() > 0;
-    }
-// Check consumer key
-    if (this.ok) {
-      this.consumer = new ToolConsumer(this.request.getParameter("oauth_consumer_key"), this.dataConnector, false);
-      this.ok = this.consumer.getCreated() != null;
-      if (this.debugMode && !this.ok) {
-        this.reason = "Invalid consumer key.";
-      }
-    }
-    DateTime now = DateTime.now();
-    if (this.ok) {
-      if (this.consumer.getLastAccess() == null) {
-        doSaveConsumer = true;
-      } else {
-        DateTime last = this.consumer.getLastAccess();
-        doSaveConsumer = doSaveConsumer || last.isBefore(now.withTimeAtStartOfDay());
-      }
-      this.consumer.setLastAccess(now);
-      OAuthConsumer oAuthConsumer = new OAuthConsumer("about:blank", this.consumer.getKey(), this.consumer.getSecret(), null);
-      OAuthAccessor oAuthAccessor = new OAuthAccessor(oAuthConsumer);
-      OAuthValidator oAuthValidator = new SimpleOAuthValidator();
-      OAuthMessage oAuthMessage = OAuthServlet.getMessage(this.request, null);
-      try {
-        oAuthValidator.validateMessage(oAuthMessage, oAuthAccessor);
-      } catch (Exception e) {
-        this.ok = false;
-        if (this.reason == null) {
-          this.reason = "OAuth signature check failed - perhaps an incorrect secret or timestamp.";
-        }
-      }
-    }
-    if (this.ok && this.consumer.isThisprotected()) {
-      if (this.consumer.getConsumerGuid() != null) {
-        this.ok = (this.request.getParameter("tool_consumer_instance_guid") != null) &&
-           (this.request.getParameter("tool_consumer_instance_guid").length() > 0) &&
-           this.consumer.getConsumerGuid().equals(this.request.getParameter("tool_consumer_instance_guid"));
-        if (this.debugMode && !this.ok) {
-          this.reason = "Request is from an invalid tool consumer.";
-        }
-      } else {
-        this.ok = this.request.getParameter("tool_consumer_instance_guid") != null;
-        if (this.debugMode && !this.ok) {
-          this.reason = "A tool consumer GUID must be included in the launch request.";
-        }
-      }
-    }
-    if (this.ok) {
-      this.ok = this.consumer.isEnabled();
-      if (this.debugMode && !this.ok) {
-        this.reason = "Tool consumer has not been enabled by the tool provider.";
-      }
-    }
-    if (this.ok) {
-      this.ok = (this.consumer.getEnableFrom() == null) || now.isAfter(this.consumer.getEnableFrom());
-      if (this.ok) {
-        this.ok = (this.consumer.getEnableUntil() == null) || this.consumer.getEnableUntil().isAfter(now);
-        if (this.debugMode && !this.ok) {
-          this.reason = "Tool consumer access has expired.";
-        }
-      } else if (this.debugMode) {
-        this.reason = "Tool consumer access is not yet available.";
-      }
-    }
-// Check nonce value
-    if (this.ok) {
-      ConsumerNonce nonce = new ConsumerNonce(this.consumer, this.request.getParameter("oauth_nonce"));
-      this.ok = !nonce.load();
-      if (this.ok) {
-        this.ok = nonce.save();
-      }
-      if (this.debugMode && !this.ok) {
-        this.reason = "Invalid nonce.";
-      }
-    }
-//
-/// Validate launch parameters
-//
-    if (this.ok) {
-      List<String> invalidParameters = new ArrayList<String>();
-      for (String name : constraints.keySet()) {
-        ParameterConstraint parameterConstraint = this.constraints.get(name);
-        boolean err = false;
-        if (parameterConstraint.isRequired()) {
-          if ((this.request.getParameter(name) == null) || (this.request.getParameter(name).trim().length() <= 0)) {
-            invalidParameters.add(name);
-            err = true;
-          }
-        }
-        if (!err && (parameterConstraint.getMaxLength() != null) && (this.request.getParameter(name) != null)) {
-          if (this.request.getParameter(name).trim().length() > parameterConstraint.getMaxLength()) {
-            invalidParameters.add(name);
-          }
-        }
-      }
-      if (invalidParameters.size() > 0) {
-        this.ok = false;
-        if (this.reason == null) {
-          StringBuilder msg = new StringBuilder("Invalid parameter(s): ");
-          for (int i = 0; i < invalidParameters.size(); i++) {
-            if (i > 0) {
-              msg.append(", ");
-            }
-            msg.append(invalidParameters.get(i));
-          }
-          this.reason = msg.toString();
-        }
-      }
-    }
+	// Validate other message parameter values
+	            if (ok) {
+	            	List<String> boolValues = Arrays.asList("true", "false");
+	            	String acceptUnsigned = request.getParameter("accept_unsigned");
+	            	String acceptMultiple = request.getParameter("accept_multiple");
+	            	String acceptCopyAdvice = request.getParameter("accept_copy_advice");
+	            	String autoCreate = request.getParameter("auto_create");
+	            	String canConfirm = request.getParameter("can_confirm");
+	            	String lpdt = request.getParameter("launch_presentation_document_target");
+	                if (messageType.equals("ContentItemSelectionRequest")) {
+	                    if (StringUtils.isNotEmpty(acceptUnsigned)) {
+	                    	ok = boolValues.contains(acceptUnsigned);
+	                    	if (!ok) {
+	                    		reason = "Invalid value for accept_unsigned parameter: " + acceptUnsigned + ".";
+	                    	}
+	                    }
+	                    if (ok && StringUtils.isNotEmpty(acceptMultiple)) {
+	                    	ok = boolValues.contains(acceptMultiple);
+	                    	if (!ok) {
+	                    		reason = "Invalid value for accept_multiple parameter: " + acceptMultiple + ".";
+	                    	}
+	                    }
+	                    if (ok && StringUtils.isNotEmpty(acceptCopyAdvice)) {
+	                    	ok = boolValues.contains(acceptCopyAdvice);
+	                    	if (!ok) {
+	                    		reason = "Invalid value for accept_copy_advice parameter: " + acceptCopyAdvice + ".";
+	                    	}
+	                    }
+	                    if (ok && StringUtils.isNotEmpty(autoCreate)) {
+	                    	ok = boolValues.contains(autoCreate);
+	                    	if (!ok) {
+	                    		reason = "Invalid value for auto_create parameter: " + autoCreate + ".";
+	                    	}
+	                    }
+	                    if (ok && StringUtils.isNotEmpty(canConfirm)) {
+	                    	ok = boolValues.contains(canConfirm);
+	                    	if (!ok) {
+	                    		reason = "Invalid value for can_confirm parameter: " + canConfirm + ".";
+	                    	}
+	                    }
+	                } else if (StringUtils.isNotEmpty(lpdt)) {
+	                	List<String> valid = Arrays.asList("embed", "frame", "iframe", "window", "popup", "overlay", "none");
+    					ok = valid.contains(lpdt);
+    					if (!ok) {
+    						reason = "Invalid value for launch_presentation_document_target parameter: " + lpdt +".";
+    	                }
+	                }
+	            }
+	        }
 
-    if (this.ok) {
-      this.consumer.setDefaultEmail(this.defaultEmail);
-//
-/// Set the request context/resource link
-//
-      this.resourceLink = ResourceLink.fromConsumer(this.consumer, this.request.getParameter("resource_link_id").trim());
-      if (this.request.getParameter("context_id") != null) {
-        this.resourceLink.setContextId(this.request.getParameter("context_id").trim());
-      }
-      this.resourceLink.setLtiResourceLinkId(this.request.getParameter("resource_link_id").trim());
-      StringBuilder title = new StringBuilder();
-      if (this.request.getParameter("context_title") != null) {
-        title.append(this.request.getParameter("context_title").trim());
-      }
-      if ((this.request.getParameter("resource_link_title") != null) &&
-          (this.request.getParameter("resource_link_title").trim().length() > 0)) {
-        if (title.length() > 0) {
-          title.append(": ");
-        }
-        title.append(this.request.getParameter("resource_link_title").trim());
-      }
-      if (title.length() <= 0) {
-        title.append("Course ").append(this.resourceLink.getId());
-      }
-      this.resourceLink.setTitle(title.toString());
-// Save LTI parameters
-      for (String name : LTI_RESOURCE_LINK_SETTING_NAMES) {
-        this.resourceLink.setSetting(name, this.request.getParameter(name));
-      }
-// Delete any existing custom parameters
-      Map<String,List<String>> settings = this.resourceLink.getSettings();
-      for (String name : settings.keySet()) {
-        if (name.startsWith("custom_")) {
-          this.resourceLink.setSetting(name, (String)null);
-        }
-      }
-// Save custom parameters
-      for (String name : settings.keySet()) {
-        if (name.startsWith("custom_")) {
-        	resourceLink.setSetting(name, settings.get(name));
-        }
-      }
-//
-/// Set the user instance
-//
-      String userId = "";
-      if (this.request.getParameter("user_id") != null) {
-        userId = this.request.getParameter("user_id").trim();
-      }
-      this.user = User.fromResourceLink(this.resourceLink, userId);
-//
-/// Set the user name
-//
-      String firstname = "";
-      if (this.request.getParameter("lis_person_name_given") != null) {
-        firstname = this.request.getParameter("lis_person_name_given");
-      }
-      String lastname = "";
-      if (this.request.getParameter("lis_person_name_family") != null) {
-        lastname = this.request.getParameter("lis_person_name_family");
-      }
-      String fullname = "";
-      if (this.request.getParameter("lis_person_name_full") != null) {
-        fullname = this.request.getParameter("lis_person_name_full");
-      }
-      this.user.setNames(firstname, lastname, fullname);
-//
-/// Set the user email
-//
-      String email = "";
-      if (this.request.getParameter("lis_person_contact_email_primary") != null) {
-        email = this.request.getParameter("lis_person_contact_email_primary");
-      }
-      this.user.setEmail(email, this.defaultEmail);
-//
-/// Set the user roles
-//
-      if (this.request.getParameter("roles") != null) {
-        this.user.setRoles(this.request.getParameter("roles"));
-      }
-//
-/// Save the user instance
-//
-      if (this.request.getParameter("lis_result_sourcedid") != null) {
-        if (!this.request.getParameter("lis_result_sourcedid").equals(this.user.getLtiResultSourcedId())) {
-          this.user.setLtiResultSourcedId(this.request.getParameter("lis_result_sourcedid"));
-          this.user.save();
-        }
-      } else if (this.user.getLtiResultSourcedId() != null) {
-        this.user.delete();
-      }
-//
-/// Initialise the consumer and check for changes
-//
-      if (!this.request.getParameter("lti_version").equals(this.consumer.getLtiVersion())) {
-        this.consumer.setLtiVersion(this.request.getParameter("lti_version"));
-        doSaveConsumer = true;
-      }
-      if (this.request.getParameter("tool_consumer_instance_name") != null) {
-        if (!this.request.getParameter("tool_consumer_instance_name").equals(this.consumer.getConsumerName())) {
-          this.consumer.setConsumerName(this.request.getParameter("tool_consumer_instance_name"));
-          doSaveConsumer = true;
-        }
-      }
-      if (this.request.getParameter("tool_consumer_info_product_family_code") != null) {
-        String version = this.request.getParameter("tool_consumer_info_product_family_code");
-        if (this.request.getParameter("tool_consumer_info_version") != null) {
-          version += "-" + this.request.getParameter("tool_consumer_info_version");
-        }
-// do not delete any existing consumer version if none is passed
-        if (!version.equals(this.consumer.getConsumerVersion())) {
-          this.consumer.setConsumerVersion(version);
-          doSaveConsumer = true;
-        }
-      } else if ((this.request.getParameter("ext_lms") != null) &&
-         !this.request.getParameter("ext_lms").equals(this.consumer.getConsumerName())) {
-        this.consumer.setConsumerVersion(this.request.getParameter("ext_lms"));
-        doSaveConsumer = true;
-      }
-      if ((this.request.getParameter("tool_consumer_instance_guid") != null) &&
-         (this.consumer.getConsumerGuid() == null)) {
-        this.consumer.setConsumerGuid(this.request.getParameter("tool_consumer_instance_guid"));
-        doSaveConsumer = true;
-      }
-      if (this.request.getParameter("launch_presentation_css_url") != null) {
-        if (!this.request.getParameter("launch_presentation_css_url").equals(this.consumer.getCssPath())) {
-          this.consumer.setCssPath(this.request.getParameter("launch_presentation_css_url"));
-          doSaveConsumer = true;
-        }
-      } else if ((this.request.getParameter("ext_launch_presentation_css_url") != null) &&
-         !this.request.getParameter("ext_launch_presentation_css_url").equals(this.consumer.getCssPath())) {
-        this.consumer.setCssPath(this.request.getParameter("ext_launch_presentation_css_url"));
-        doSaveConsumer = true;
-      } else if (this.consumer.getCssPath() != null) {
-        this.consumer.setCssPath(null);
-        doSaveConsumer = true;
-      }
-    }
-//
-/// Persist changes to consumer
-//
-    if (doSaveConsumer) {
-      this.consumer.save();
-    }
+	        if (ok && (messageType.equals("ToolProxyRegistrationRequest"))) {
 
-    if (this.ok) {
-//
-/// Check if a share arrangement is in place for this resource link
-//
-      this.ok = this.checkForShare();
-//
-/// Persist changes to resource link
-//
-      this.resourceLink.save();
-    }
+	            ok = request.getParameter("lti_version").equals(LTI_VERSION2);
+	            if (!ok) {
+	                reason = "Invalid lti_version parameter";
+	            }
+	            if (ok) {
+	            	HttpClient client = HttpClientBuilder.create().build();
+	            	String tcProfUrl = request.getParameter("tc_profile_url");
+	            	HttpGet get = new HttpGet(tcProfUrl);
+	            	get.addHeader("Accept","application/vnd.ims.lti.v2.toolconsumerprofile+json");
+	            	HttpResponse response = null;
+					try {
+						response = client.execute(get);
+					} catch (ClientProtocolException e) {
+						e.printStackTrace();
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+	            	if (response == null) {
+	            		reason = "Tool consumer profile not accessible.";
+	            	} else {
+	            		try {
+	            			String json_string = EntityUtils.toString(response.getEntity());
+	            			tcProfile = (JSONObject)parser.parse(json_string);
+		            		ok = tcProfile != null;
+		            		if (!ok) {
+		            			reason = "Invalid JSON in tool consumer profile.";
+		            		} else {
+		            			JSONContext jsonContext = new JSONContext();
+		            			jsonContext.parse(tcProfile);
+		            			consumer.getProfile().setContext(jsonContext);
+		            		}
+	            		} catch (Exception je) {
+	            			je.printStackTrace();
+	            			ok = false;
+	            			reason = "Invalid JSON in tool consumer profile.";
+	            		}
+	                }
+	            }
+	// Check for required capabilities
+	            if (ok) {
+	            	String regKey = request.getParameter("reg_key");
+	                consumer = new ToolConsumer(regKey, dataConnector);
+	                ConsumerProfile profile = new ConsumerProfile();
+	                JSONContext context = new JSONContext();
+	                context.parse(tcProfile);
+	                profile.setContext(context);
+	                consumer.setProfile(profile);
+	                List<String> capabilities = consumer.getProfile().getCapabilityOffered();
+	                List<String> missing = new ArrayList<String>();
+	                for (ProfileResourceHandler handler : resourceHandlers) {
+	                	for (ProfileMessage message : handler.getRequiredMessages()) {
+	                		String type = message.getType();
+	                		if (!capabilities.contains(type)) {
+	                			missing.add(type);
+	                		}
+	                	}
+	                }
+	                for (String name : constraints.keySet()) {
+	                	ParameterConstraint constraint = constraints.get(name);
+	                    if (constraint.isRequired()) {
+	                        if (!capabilities.contains(name)) {
+	                            missing.add(name);
+	                        }
+	                    }
+	                }
+	                if (!missing.isEmpty()) {
+	                	StringBuilder sb = new StringBuilder();
+	                	for (String cap : missing) {
+	                		sb.append(cap).append(", ");
+	                	}
+	                    reason = "Required capability not offered - \"" + sb.toString() + "\"";
+	                    ok = false;
+	                }
+	            }
+	// Check for required services
+	            if (ok) {
+	                for (ToolService tService : requiredServices) {
+	                    for (String format: tService.getFormats()) {
+	                    	ServiceDefinition sd = findService(format, tService.getActions());
+	                        if (sd == null) {
+	                            if (ok) {
+	                                reason = "Required service(s) not offered - ";
+	                                ok = false;
+	                            } else {
+	                                reason += ", ";
+	                            }
+	                            StringBuilder sb = new StringBuilder();
+	                            for (String a : tService.getActions()) {
+	                            	sb.append(a).append(", ");
+	                            }
+	                            reason += format + "[" + sb.toString() + "]";
+	                        }
+	                    }
+	                }
+	            }
+	            if (ok) {
+	                if (messageType.equals("ToolProxyRegistrationRequest")) {
+	                	ConsumerProfile profile = new ConsumerProfile();
+		                JSONContext context = new JSONContext();
+		                context.parse(tcProfile);
+		                profile.setContext(context);
+		                consumer.setProfile(profile);
+	                    consumer.setSecret(request.getParameter("reg_password"));
+	                    consumer.setLtiVersion(request.getParameter("lti_version"));
+	                    consumer.setName(profile.getProduct().getProductInfo().getProductName().get("default_name"));
+	                    consumer.setConsumerName(consumer.getName());
+	                    consumer.setConsumerVersion("{tcProfile.product_instance.product_info.product_family.code}-{tcProfile.product_instance.product_info.product_version}");
+	                    consumer.setConsumerGuid(profile.getProduct().getGuid());
+	                    consumer.setEnabled(true);
+	                    consumer.setThisprotected(true);
+	                    doSaveConsumer = true;
+	                }
+	            }
+	        } else if (ok && !request.getParameter("custom_tc_profile_url").isEmpty() && consumer.getProfile() == null) {
+	        	String tcProfUrl = request.getParameter("custom_tc_profile_url");
+	        	HttpClient client = HttpClientBuilder.create().build();
+	        	HttpGet get = new HttpGet(tcProfUrl);
+            	get.addHeader("Accept","application/vnd.ims.lti.v2.toolconsumerprofile+json");
+            	HttpResponse response = null;
+				try {
+					response = client.execute(get);
+				} catch (ClientProtocolException e) {
+					e.printStackTrace();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+            	if (response == null) {
+            		reason = "Tool consumer profile not accessible.";
+            	} else {
+            		try {
+            			String json_string = EntityUtils.toString(response.getEntity());
+            			tcProfile = (JSONObject)parser.parse(json_string);
+	            		ok = tcProfile != null;
+	            		if (!ok) {
+	            			reason = "Invalid JSON in tool consumer profile.";
+	            		} else {
+	            			JSONContext jsonContext = new JSONContext();
+	            			jsonContext.parse(tcProfile);
+	            			consumer.getProfile().setContext(jsonContext);
+	            			doSaveConsumer = true;
+	            		}
+            		} catch (Exception je) {
+            			je.printStackTrace();
+            			ok = false;
+            			reason = "Invalid JSON in tool consumer profile.";
+            		}
+                }
+	        }
 
-    return this.ok;
+	// Validate message parameter constraints
+	        if (ok) {
+	            List<String> invalidParameters = new ArrayList<String>();
+	            for (String name : constraints.keySet()) {
+	            	ParameterConstraint constraint = constraints.get(name);
+	                if (constraint.getMessageTypes().isEmpty() || constraint.getMessageTypes().contains(messageType)) {
+	                    ok = true;
+	                    String n = request.getParameter("name");
+	                    if (constraint.isRequired()) {
+	                    	n = n.trim();
+	                        if (StringUtils.isBlank(n)) {
+	                            invalidParameters.add(name + " (missing)");
+	                            ok = false;
+	                        }
+	                    }
+	                    if (ok && constraint.getMaxLength() > 0 && StringUtils.isNotBlank(n)) {
+	                        if (n.trim().length()>constraint.getMaxLength()) {
+	                            invalidParameters.add(name + " (too long)");
+	                        }
+	                    }
+	                }
+	            }
+	            if (invalidParameters.size() > 0) {
+	                ok = false;
+	                if (StringUtils.isEmpty(reason)) {
+	                	StringBuilder sb = new StringBuilder();
+	                	for (String ip : invalidParameters) {
+	                		sb.append(ip).append(", ");
+	                	}
+	                    reason = "Invalid parameter(s): " + sb.toString() +  ".";
+	                }
+	            }
+	        }
 
-  }
+	        if (ok) {
+
+	// Set the request context
+	        	String cId = request.getParameter("context_id");
+	            if (StringUtils.isNotEmpty(cId)) {
+	                context = Context.fromConsumer(consumer, cId.trim());
+	                String title = request.getParameter("context_title");
+	                if (StringUtils.isNotEmpty(title)) {
+	                    title = title.trim();
+	                }
+	                if (StringUtils.isBlank(title)) {
+	                    title = "Course " + context.getId();
+	                }
+	                context.setTitle(title);
+	            }
+
+	// Set the request resource link
+	            String rlId = request.getParameter("resource_link_id");
+	            if (StringUtils.isNotEmpty(rlId)) {
+	                String contentItemId = request.getParameter("custom_content_item_id");
+	                resourceLink = ResourceLink.fromConsumer(consumer,rlId.trim(), contentItemId);
+	                if (context != null) {
+	                    resourceLink.setContextId(context.getRecordId());
+	                }
+	                String title = request.getParameter("resource_link_title");
+	                if (StringUtils.isEmpty(title)) {
+	                    title = "Resource " + resourceLink.getId();
+	                }
+	                resourceLink.setTitle(title);
+	// Delete any existing custom parameters
+	                for (String name : consumer.getSettings().keySet()) {
+	                    if (StringUtils.startsWith(name, "custom_")) {
+	                        consumer.setSetting(name);
+	                        doSaveConsumer = true;
+	                    }
+	                }
+	                if (context != null) {
+	                    for (String name : context.getSettings().keySet()) {
+	                        if (StringUtils.startsWith(name, "custom_")) {
+	                            context.setSetting(name, "");
+	                        }
+	                    }
+	                }
+	                for (String name : resourceLink.getSettings().keySet()) {
+	                    if (StringUtils.startsWith(name, "custom_")) {
+	                        resourceLink.setSetting(name, "");
+	                    }
+	                }
+	// Save LTI parameters
+	                for (String name : LTI_CONSUMER_SETTING_NAMES) {
+	                	String s = request.getParameter(name);
+	                	if (StringUtils.isNotBlank(s)) {
+	                		consumer.setSetting(name, s);
+	                    } else {
+	                        consumer.setSetting(name);
+	                    }
+	                }
+	                if (context != null) {
+	                    for (String name : LTI_CONTEXT_SETTING_NAMES) {
+	                    	String s = request.getParameter(name);
+	                        if (StringUtils.isNotBlank(s)) {
+	                            context.setSetting(name, s);
+	                        } else {
+	                            context.setSetting(name, "");
+	                        }
+	                    }
+	                }
+	                for (String name : LTI_RESOURCE_LINK_SETTING_NAMES) {
+	                	String sn = request.getParameter(name);
+	                    if (StringUtils.isNotEmpty(sn)) {
+	                        resourceLink.setSetting(name, sn);
+	                    } else {
+	                        resourceLink.setSetting(name, "");
+	                    }
+	                }
+	// Save other custom parameters
+	                ArrayList<String> combined = new ArrayList<String>();
+	                combined.addAll(Arrays.asList(LTI_CONSUMER_SETTING_NAMES));
+	                combined.addAll(Arrays.asList(LTI_CONTEXT_SETTING_NAMES));
+	                combined.addAll(Arrays.asList(LTI_RESOURCE_LINK_SETTING_NAMES));
+	                for (String name : request.getParameterMap().keySet()) {
+	                	String value = request.getParameter(name);
+	                	if (StringUtils.startsWith(name, "custom_") &&
+	                		!combined.contains(name)) {
+	                		resourceLink.setSetting(name, value);
+	                	}
+	                }
+	            }
+
+	// Set the user instance
+	            String userId = request.getParameter("user_id");
+	            if (StringUtils.isNotEmpty(userId)) {
+	                userId = userId.trim();
+	            }
+
+	            user = User.fromResourceLink(resourceLink, userId);
+
+	// Set the user name
+	            String firstname = request.getParameter("lis_person_name_given");
+	            String lastname = request.getParameter("lis_person_name_family");
+	            String fullname = request.getParameter("lis_person_name_full");
+	            user.setNames(firstname, lastname, fullname);
+
+	// Set the user email
+	            String email = request.getParameter("lis_person_contact_email_primary");
+	            user.setEmail(email, defaultEmail);
+
+	// Set the user image URI
+	            String img = request.getParameter("user_image");
+	            if (StringUtils.isNotEmpty(img)) {
+	            	try {
+	            		URL imgUrl = new URL(img);
+	            		user.setImage(imgUrl);
+	            	} catch (Exception e) {
+	            		//bad url
+	            	}
+	            }
+
+	// Set the user roles
+	            String roles = request.getParameter("roles");
+	            if (StringUtils.isNotEmpty(roles)) {
+	                user.setRoles(parseRoles(roles));
+	            }
+
+	// Initialise the consumer and check for changes
+	            consumer.setDefaultEmail(defaultEmail);
+	            String ltiV = request.getParameter("lti_version");
+	            if (!consumer.getLtiVersion().equals(ltiV)) {
+	                consumer.setLtiVersion(ltiV);
+	                doSaveConsumer = true;
+	            }
+	            String instanceName = request.getParameter("tool_consumer_instance_name");
+	            if (StringUtils.isNotEmpty(instanceName)) {
+	                if (consumer.getConsumerName().equals(instanceName)) {
+	                    consumer.setConsumerName(instanceName);
+	                    doSaveConsumer = true;
+	                }
+	            }
+	            String familyCode = request.getParameter("tool_consumer_info_product_family_code");
+	            String extLMS = request.getParameter("ext_lms");
+	            if (StringUtils.isNotBlank(familyCode)) {
+	                String version = familyCode;
+	                String infoVersion = request.getParameter("tool_consumer_info_version");
+	                if (StringUtils.isNotEmpty(infoVersion)) {
+	                    version += "-" + infoVersion;
+	                }
+	// do not delete any existing consumer version if none is passed
+	                if (!consumer.getConsumerVersion().equals(version)) {
+	                    consumer.setConsumerVersion(version);
+	                    doSaveConsumer = true;
+	                }
+	            } else if (StringUtils.isNotEmpty(extLMS) && !consumer.getConsumerName().equals(extLMS)) {
+	                consumer.setConsumerVersion(extLMS);
+	                doSaveConsumer = true;
+	            }
+	            String tciGuid = request.getParameter("tool_consumer_instance_guid");
+	            if (StringUtils.isNotEmpty(tciGuid)) {
+	                if (StringUtils.isNotEmpty(consumer.getConsumerGuid())) {
+	                    consumer.setConsumerGuid(tciGuid);
+	                    doSaveConsumer = true;
+	                } else if (!consumer.isThisprotected()) {
+	                    doSaveConsumer = (!consumer.getConsumerGuid().equals(tciGuid));
+	                    if (doSaveConsumer) {
+	                        consumer.setConsumerGuid(tciGuid);
+	                    }
+	                }
+	            }
+	            String css = request.getParameter("launch_presentation_css_url");
+	            String extCss = request.getParameter("ext_launch_presentation_css_url");
+	            if (StringUtils.isNotEmpty(css)) {
+	                if (!consumer.getCssPath().equals(css)) {
+	                    consumer.setCssPath(css);
+	                    doSaveConsumer = true;
+	                }
+	            } else if (StringUtils.isNotEmpty(extCss) &&
+	                 !consumer.getCssPath().equals(extCss)) {
+	                consumer.setCssPath(extCss);
+	                doSaveConsumer = true;
+	            } else if (StringUtils.isNotEmpty(consumer.getCssPath())) {
+	                consumer.setCssPath(null);
+	                doSaveConsumer = true;
+	            }
+	        }
+
+	// Persist changes to consumer
+	        if (doSaveConsumer) {
+	            consumer.save();
+	        }
+	        if (ok && context != null) {
+	            context.save();
+	        }
+	        if (ok && resourceLink != null) {
+
+	// Check if a share arrangement is in place for this resource link
+	            ok = checkForShare();
+
+	// Persist changes to resource link
+	            resourceLink.save();
+
+	// Save the user instance
+	            String lrsdid = request.getParameter("lis_result_sourcedid");
+	            if (StringUtils.isNotEmpty(lrsdid)) {
+	                if (!user.getLtiResultSourcedId().equals(lrsdid)) {
+	                    user.setLtiResultSourcedId(lrsdid);
+	                    user.save();
+	                }
+	            } else if (StringUtils.isNotEmpty(user.getLtiResultSourcedId())) {
+	                user.setLtiResultSourcedId("");
+	                user.save();
+	            }
+	        }
+
+	        return ok;
+
+	    }
 
 
 	/**
@@ -1332,19 +1698,19 @@ public class ToolProvider {
 		this.redirectUrl = redirectUrl;
 	}
 
-	public String getMediaTypes() {
+	public Set<String> getMediaTypes() {
 		return mediaTypes;
 	}
 
-	public void setMediaTypes(String mediaTypes) {
+	public void setMediaTypes(Set<String> mediaTypes) {
 		this.mediaTypes = mediaTypes;
 	}
 
-	public String getDocumentTargets() {
+	public Set<String> getDocumentTargets() {
 		return documentTargets;
 	}
 
-	public void setDocumentTargets(String documentTargets) {
+	public void setDocumentTargets(Set<String> documentTargets) {
 		this.documentTargets = documentTargets;
 	}
 

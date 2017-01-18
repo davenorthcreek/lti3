@@ -102,7 +102,7 @@ public class Context implements LTISource {
 	    public void initialize()
 	    {
 
-	        this.title = "";
+	        this.setTitle("");
 	        this.settings = new HashMap<String, String>();
 	        this.created = null;
 	        this.updated = null;
@@ -348,20 +348,20 @@ public class Context implements LTISource {
 	 * @return mixed The array of settings if successful, otherwise false
 	 */
 	    
-	    public Map<String, String> getToolSettings() {
+	    public Map<String, List<String>> getToolSettings() {
 	    	return getToolSettings(ToolSettings.MODE_CURRENT_LEVEL, true);
 	    }
 	    
-	    public Map<String, String> getToolSettings(int mode) {
+	    public Map<String, List<String>> getToolSettings(int mode) {
 	    	return getToolSettings(mode, true);
 	    }
 	    
-	    public Map<String, String> getToolSettings(int mode, boolean simple)
+	    public Map<String, List<String>> getToolSettings(int mode, boolean simple)
 	    {
 	    	
 	        String url = this.getSetting("custom_context_setting_url");
 	        ToolSettings service = new ToolSettings(this, url, simple);
-	        Map<String, String> response = service.get(mode);
+	        Map<String, List<String>> response = service.get(mode);
 
 	        return response;
 
@@ -504,6 +504,14 @@ public class Context implements LTISource {
 
 	public Map<String, User> getUserResultSourcedIDs(boolean flag, int scope) {
 		return getDataConnector().getUserResultSourcedIDsContext(this, flag, scope);
+	}
+
+	public String getTitle() {
+		return title;
+	}
+
+	public void setTitle(String title) {
+		this.title = title;
 	}
 
 }

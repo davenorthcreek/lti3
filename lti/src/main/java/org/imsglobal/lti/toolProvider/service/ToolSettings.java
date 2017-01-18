@@ -10,6 +10,7 @@ import org.imsglobal.lti.LTIMessage;
 import org.imsglobal.lti.LTIUtil;
 import org.imsglobal.lti.toolProvider.LTISource;
 import org.imsglobal.lti.toolProvider.ToolConsumer;
+import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
 /**
@@ -111,7 +112,7 @@ public class ToolSettings extends Service {
 	}
 	
 	@SuppressWarnings("rawtypes")
-	public Map get() {
+	public Map<String, List<String>> get() {
 		return get(MODE_CURRENT_LEVEL);
 	}
 	
@@ -123,7 +124,7 @@ public class ToolSettings extends Service {
 	 * @return mixed The array of settings if successful, otherwise false
 	 */
 	@SuppressWarnings("rawtypes")
-	public Map get(int mode) {
+	public Map<String, List<String>> get(int mode) {
 		JSONObject response = new JSONObject();
 		Map<String, List<String>> parameter = new HashMap<String, List<String>>();
 		if (mode == MODE_ALL_LEVELS) {
@@ -146,15 +147,32 @@ public class ToolSettings extends Service {
 	    		
 	    		String type = (String)jlevel.get("@type");
 	    		String theLevel = LEVEL_NAMES.get(type);
-	    		@SuppressWarnings("unchecked")
-				HashMap<String, Object> hmResponse = new HashMap<String, Object>(response);
-	    		hmResponse.put(theLevel, settings);
-	    		return hmResponse;
+
+	    		response.put(theLevel, settings);
 	    	}
 	    }
-	    return response;
+	    //response is a JSONObject, with keys pointing to JSON objects.  Need to parse this down to 
+	    //Map<String, List<String>> to match the rest of the library, and get it out of JSON
+	    return parseToMap(response);
 	}
 
+	
+	private Map<String, List<String>> parseToMap(JSONObject json) {
+		Map<String, List<String>> returnMap = new HashMap<String, List<String>>();
+		for (Object key : json.keySet()) {
+			Object values = json.get(key);
+			if (values instanceof JSONArray) {
+				for (Object v2 : (JSONArray)values) {
+					JSONObject v2Json = (JSONObject)v2;
+					//depends on json that is sent - debug with real json
+					throw new RuntimeException("Got to JSON Parse: " + v2.toString());
+				}
+			}
+		}
+		return returnMap;
+	}
+	
+	
 	/**
 	 * Set the tool settings.
 	 *
