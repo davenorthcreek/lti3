@@ -15,11 +15,6 @@ import java.util.Map.Entry;
 
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.http.HttpResponse;
-import org.apache.http.client.ClientProtocolException;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.impl.client.HttpClientBuilder;
 import org.imsglobal.lti.LTIMessage;
 import org.imsglobal.lti.LTIUtil;
 import org.imsglobal.lti.profile.ServiceDefinition;
@@ -27,8 +22,6 @@ import org.imsglobal.lti.signature.oauth1.OAuthUtil;
 import org.imsglobal.lti.toolProvider.dataConnector.DataConnector;
 import org.imsglobal.lti.toolProvider.dataConnector.DataConnectorFactory;
 import org.imsglobal.lti.toolProvider.mediaType.ConsumerProfile;
-import org.imsglobal.lti.toolProvider.mediaType.ToolService;
-import org.imsglobal.lti.toolProvider.service.Service;
 import org.imsglobal.lti.toolProvider.service.ToolSettings;
 import org.joda.time.DateTime;
 import org.json.simple.JSONObject;
@@ -36,13 +29,7 @@ import org.json.simple.JSONObject;
 import net.oauth.OAuthAccessor;
 import net.oauth.OAuthConsumer;
 import net.oauth.OAuthException;
-import net.oauth.signature.OAuthSignatureMethod;
-import net.oauth.server.OAuthServlet;
-import net.oauth.server.HttpRequestMessage;
 import net.oauth.OAuthMessage;
-import net.oauth.OAuthValidator;
-import net.oauth.SimpleOAuthValidator;
-import net.oauth.signature.HMAC_SHA1;
 
 
 
