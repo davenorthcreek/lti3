@@ -10,12 +10,18 @@ public class TestToolProvider extends ToolProvider {
 
 	public TestToolProvider(DataConnector dataConnector, HttpServletRequest request, HttpServletResponse response) {
 		super(dataConnector, request, response);
-		
+		this.setDebugMode(true);
 	}
 	
 	@Override
 	public boolean onLaunch() {
 		return false;
+	}
+	
+	@Override
+	public boolean onError() {
+		System.out.println("At onError");
+		return super.onError();
 	}
 
 }

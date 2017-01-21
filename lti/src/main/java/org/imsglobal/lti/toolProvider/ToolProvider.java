@@ -282,7 +282,7 @@ public class ToolProvider {
 	 *
 	 * @var array details
 	 */
-	    private List<String> details;
+	    private List<String> details = new ArrayList<String>();
 	/**
 	 * Base URL for tool provider service
 	 *
@@ -673,9 +673,13 @@ public class ToolProvider {
 	 */
 	    protected boolean onError()
 	    {
-
-	        return doCallback("onError");
-
+	    	System.err.println(reason);
+	    	if (debugMode) {
+	    		for (String detail : details) {
+	    			System.err.println(detail);
+	    		}
+	    	}
+	    	return true;
 	    }
 
 	///
@@ -697,6 +701,7 @@ public class ToolProvider {
 	    {
 
 	        String callback = method;
+	        System.out.println("Looking for " + method);
 	        Boolean retVal = null;
 	        if (callback == null) {
 	            callback = getMessageType();
@@ -704,9 +709,11 @@ public class ToolProvider {
 	        Class<? extends ToolProvider> clazz = this.getClass();
 	        boolean methodExists = false;
 	        for (Method m : clazz.getDeclaredMethods()) {
-	        	if (m.getName().equals(callback))
+	        	System.out.println("Method is " + m.getName());
+	        	if (m.getName().equals(callback)) {
+	        		methodExists = true;
 					try {
-						retVal = (Boolean) m.invoke(this, (Object[])null);
+						retVal = (Boolean) m.invoke(this);
 					} catch (IllegalAccessException e) {
 						e.printStackTrace();
 					} catch (IllegalArgumentException e) {
@@ -714,11 +721,12 @@ public class ToolProvider {
 					} catch (InvocationTargetException e) {
 						e.printStackTrace();
 					} //returns a boolean
+	        	}
 	        }
 	        if (!methodExists) { //didn"t find the method in declared methods
-	        	if (StringUtils.isNotEmpty(method) && ok) {
-	        		ok = false;
+	        	if (StringUtils.isNotEmpty(method)) {
 	        		reason = "Message type not supported: " + getMessageType();
+	        		ok = false;
 	        	}
 	        }
 	        if (ok && (getMessageType().equals("ToolProxyRegistrationRequest"))) {
@@ -957,6 +965,7 @@ public class ToolProvider {
 						signature = oAuthMessage.getSignature();
 						baseString = OAuthSignatureMethod.getBaseString(oAuthMessage);
 					} catch (Exception e) {
+						System.err.println(e.getMessage());
 						this.ok = false;
 						if (StringUtils.isEmpty(reason)) {
 							if (debugMode) {
