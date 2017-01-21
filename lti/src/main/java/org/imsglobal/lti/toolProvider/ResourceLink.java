@@ -1328,6 +1328,7 @@ public class ResourceLink implements LTISource {
             		url.toExternalForm(), 
             		type, 
             		this.getConsumer().getLtiVersion(), 
+            		"POST",
             		params);
 // Connect to tool consumer
             LTIMessage http = new LTIMessage(url.toExternalForm(), "POST", params);

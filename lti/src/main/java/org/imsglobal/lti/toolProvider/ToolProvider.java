@@ -4,8 +4,10 @@ import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.security.Key;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -15,9 +17,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.lang3.StringEscapeUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.HttpResponse;
@@ -43,11 +48,14 @@ import org.joda.time.DateTime;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 
+import net.oauth.OAuth;
 import net.oauth.OAuthAccessor;
 import net.oauth.OAuthConsumer;
 import net.oauth.OAuthMessage;
+import net.oauth.OAuthProblemException;
 import net.oauth.OAuthValidator;
 import net.oauth.SimpleOAuthValidator;
+import net.oauth.server.HttpRequestMessage;
 import net.oauth.server.OAuthServlet;
 import net.oauth.signature.OAuthSignatureMethod;
 
@@ -426,10 +434,14 @@ public class ToolProvider {
 
 	        if (ok) {
 	            if (authenticate()) {
-	                doCallback();
+	                ok = doCallback();
 	            }
 	        }
-	        result();
+	        if (ok) {
+	        	result();
+	        } else {
+	        	onError();
+	        }
 
 	    }
 
@@ -673,13 +685,18 @@ public class ToolProvider {
 	 */
 	    protected boolean onError()
 	    {
+	    	try {
+	    		throw new Exception("At onError");
+	    	} catch (Exception e) {
+	    		e.printStackTrace();
+	    	}
 	    	System.err.println(reason);
 	    	if (debugMode) {
 	    		for (String detail : details) {
 	    			System.err.println(detail);
 	    		}
 	    	}
-	    	return true;
+	    	return false;
 	    }
 
 	///
@@ -694,14 +711,19 @@ public class ToolProvider {
 	 * @return boolean True if no error reported
 	 */
 	    private boolean doCallback() {
-	    	return doCallback(null);
+	    	String type = request.getParameter("lti_message_type");
+	    	if (type != null) {
+	    		if (METHOD_NAMES.containsKey(type)) {
+	    			return doCallback(METHOD_NAMES.get(type));
+	    		}
+	    	}
+	    	return false;
 	    }
 	    
 	    private boolean doCallback(String method)
 	    {
 
 	        String callback = method;
-	        System.out.println("Looking for " + method);
 	        Boolean retVal = null;
 	        if (callback == null) {
 	            callback = getMessageType();
@@ -709,7 +731,6 @@ public class ToolProvider {
 	        Class<? extends ToolProvider> clazz = this.getClass();
 	        boolean methodExists = false;
 	        for (Method m : clazz.getDeclaredMethods()) {
-	        	System.out.println("Method is " + m.getName());
 	        	if (m.getName().equals(callback)) {
 	        		methodExists = true;
 					try {
@@ -726,10 +747,10 @@ public class ToolProvider {
 	        if (!methodExists) { //didn"t find the method in declared methods
 	        	if (StringUtils.isNotEmpty(method)) {
 	        		reason = "Message type not supported: " + getMessageType();
-	        		ok = false;
+	        		retVal = false;
 	        	}
 	        }
-	        if (ok && (getMessageType().equals("ToolProxyRegistrationRequest"))) {
+	        if (retVal && (getMessageType().equals("ToolProxyRegistrationRequest"))) {
 	            consumer.save();
 	        }
 	        
@@ -790,12 +811,17 @@ public class ToolProvider {
 			    								errorUrl.toExternalForm(), 
 			    								"ContentItemSelection", 
 			    								version, 
+			    								"POST",
 			    								toSend);
 			    				String page = sendForm(errorUrl, signedParams);
 			    				System.out.print(page);
-			    			} 
+			    			} else {
+			    				System.err.println("Attempt to redirect to " + errorUrl);
+			    				response.sendRedirect(errorUrl.toExternalForm());
+			    			}
 			    		} else {
 			    			try {
+			    				System.err.println("Attempt to redirect to " + errorUrl);
 			    				response.sendRedirect(errorUrl.toExternalForm());
 			    			} catch (IOException ioe) {
 			    				return;
@@ -815,9 +841,12 @@ public class ToolProvider {
 					e.printStackTrace();
 				} catch (URISyntaxException e) {
 					e.printStackTrace();
+				} catch (IOException e) {
+					e.printStackTrace();
 				}	
 		   	} else if (this.redirectUrl != null) {
 		   		try {
+    				System.err.println("Attempt to redirect to " + redirectUrl);
 		   			this.response.sendRedirect(this.redirectUrl.toExternalForm());
 		   		} catch (IOException ioe) {
 		   			return;
@@ -825,6 +854,8 @@ public class ToolProvider {
 		   		return;
 		   	} else if (output != null) {
 		   		System.out.println(output);
+		   	} else {
+		   		System.out.println("Successful handling of request finished.");
 		   	}
 	    }
 	   
@@ -956,24 +987,41 @@ public class ToolProvider {
 	    			consumer.setLastAccess(now);
 	    			String baseString = "";
 	    			String signature = "";
+	    			OAuthMessage oAuthMessage = null;
 	    			try {
 						OAuthConsumer oAuthConsumer = new OAuthConsumer("about:blank", consumer.getKey(), consumer.getSecret(), null);
 						OAuthAccessor oAuthAccessor = new OAuthAccessor(oAuthConsumer);
 						OAuthValidator oAuthValidator = new SimpleOAuthValidator();
-						OAuthMessage oAuthMessage = OAuthServlet.getMessage(request, null);
-						oAuthValidator.validateMessage(oAuthMessage, oAuthAccessor);
-						signature = oAuthMessage.getSignature();
+						URL u = new URL(request.getRequestURI());
+						String url = u.getProtocol() + "://" + u.getHost() + u.getPath();
+						Map<String, String[]> params = request.getParameterMap();
+						Map<String, List<String>> param2 = new HashMap<String, List<String>>();
+						for (String k : params.keySet()) {
+							param2.put(k, Arrays.asList(params.get(k)));
+						}
+						List<Map.Entry<String, String>> param3 = ToolConsumer.convert(param2);
+						oAuthMessage = new OAuthMessage(request.getMethod(), url, param3);
 						baseString = OAuthSignatureMethod.getBaseString(oAuthMessage);
+						signature = oAuthMessage.getSignature();
+						oAuthValidator.validateMessage(oAuthMessage, oAuthAccessor);						
 					} catch (Exception e) {
 						System.err.println(e.getMessage());
+						OAuthProblemException oe = null;
+						if (e instanceof OAuthProblemException) {
+							oe = (OAuthProblemException) e;
+							for(String p : oe.getParameters().keySet()) {
+								System.err.println(p + ": " + oe.getParameters().get(p).toString());
+							}
+						}
 						this.ok = false;
 						if (StringUtils.isEmpty(reason)) {
-							if (debugMode) {
+							if (debugMode) {								
 								reason = e.getMessage();
 								if (StringUtils.isEmpty(reason)) {
 									reason = "OAuth exception.";
 								}
-								details.add("Timestamp: " + DateTime.now().toString());
+								details.add("Timestamp: " + request.getParameter("oauth_timestamp"));
+								details.add("Current system time: " + System.currentTimeMillis());
 	                            details.add("Signature: " + signature);
 	                            details.add("Base string: " + baseString);
 							} else {
@@ -1386,13 +1434,13 @@ public class ToolProvider {
 	// Initialise the consumer and check for changes
 	            consumer.setDefaultEmail(defaultEmail);
 	            String ltiV = request.getParameter("lti_version");
-	            if (!consumer.getLtiVersion().equals(ltiV)) {
+	            if (!ltiV.equals(consumer.getLtiVersion())) {
 	                consumer.setLtiVersion(ltiV);
 	                doSaveConsumer = true;
 	            }
 	            String instanceName = request.getParameter("tool_consumer_instance_name");
 	            if (StringUtils.isNotEmpty(instanceName)) {
-	                if (consumer.getConsumerName().equals(instanceName)) {
+	                if (!instanceName.equals(consumer.getConsumerName())) {
 	                    consumer.setConsumerName(instanceName);
 	                    doSaveConsumer = true;
 	                }
@@ -1406,7 +1454,7 @@ public class ToolProvider {
 	                    version += "-" + infoVersion;
 	                }
 	// do not delete any existing consumer version if none is passed
-	                if (!consumer.getConsumerVersion().equals(version)) {
+	                if (!version.equals(consumer.getConsumerVersion())) {
 	                    consumer.setConsumerVersion(version);
 	                    doSaveConsumer = true;
 	                }
@@ -1420,7 +1468,7 @@ public class ToolProvider {
 	                    consumer.setConsumerGuid(tciGuid);
 	                    doSaveConsumer = true;
 	                } else if (!consumer.isThisprotected()) {
-	                    doSaveConsumer = (!consumer.getConsumerGuid().equals(tciGuid));
+	                    doSaveConsumer = (!tciGuid.equals(consumer.getConsumerGuid()));
 	                    if (doSaveConsumer) {
 	                        consumer.setConsumerGuid(tciGuid);
 	                    }
@@ -1429,7 +1477,7 @@ public class ToolProvider {
 	            String css = request.getParameter("launch_presentation_css_url");
 	            String extCss = request.getParameter("ext_launch_presentation_css_url");
 	            if (StringUtils.isNotEmpty(css)) {
-	                if (!consumer.getCssPath().equals(css)) {
+	                if (!css.equals(consumer.getCssPath())) {
 	                    consumer.setCssPath(css);
 	                    doSaveConsumer = true;
 	                }
@@ -1461,7 +1509,7 @@ public class ToolProvider {
 	// Save the user instance
 	            String lrsdid = request.getParameter("lis_result_sourcedid");
 	            if (StringUtils.isNotEmpty(lrsdid)) {
-	                if (!user.getLtiResultSourcedId().equals(lrsdid)) {
+	                if (!lrsdid.equals(user.getLtiResultSourcedId())) {
 	                    user.setLtiResultSourcedId(lrsdid);
 	                    user.save();
 	                }

@@ -207,9 +207,8 @@ public class User {
         this.fullname = "";
         this.email = "";
         try {
-			this.setImage(new URL(""));
-		} catch (MalformedURLException e) {
-			e.printStackTrace();
+			this.setImage(null);
+		} catch (Exception e) {
 		}
         this.roles = new ArrayList<String>();
         this.groups = new ArrayList<String>();

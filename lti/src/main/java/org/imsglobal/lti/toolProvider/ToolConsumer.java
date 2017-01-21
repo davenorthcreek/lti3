@@ -8,10 +8,14 @@ import java.net.URL;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.lang3.StringUtils;
@@ -26,10 +30,12 @@ import org.imsglobal.lti.toolProvider.service.ToolSettings;
 import org.joda.time.DateTime;
 import org.json.simple.JSONObject;
 
+import net.oauth.OAuth;
 import net.oauth.OAuthAccessor;
 import net.oauth.OAuthConsumer;
 import net.oauth.OAuthException;
 import net.oauth.OAuthMessage;
+import net.oauth.signature.OAuthSignatureMethod;
 
 
 
@@ -178,7 +184,7 @@ public class ToolConsumer implements LTISource {
 		
 		private Map<String, List<String>> toolProxyMap;
 		
-		private ConsumerProfile profile;
+		private ConsumerProfile profile = new ConsumerProfile();
 	    
 	    public String getName() {
 			return name;
@@ -643,15 +649,16 @@ public class ToolConsumer implements LTISource {
 
 	    }
 	    
-	    private static List<Entry<String, String>> convert(Map<String, List<String>> params) {
+	    protected static List<Entry<String, String>> convert(Map<String, List<String>> params) {
 	    	List<Map.Entry<String, String>> theList = new ArrayList<Map.Entry<String, String>>();
-	    	for (String k : params.keySet()) {
-	    		for (String v : params.get(k)) {
-	    			Map<String, String> temp = new HashMap<String, String>();
-	    			temp.put(k, v);
-	    			for (Entry<String, String> e : temp.entrySet()) {
-	    				theList.add(e);
-	    			}
+	    	Set<String> sortedList = new TreeSet<String>();
+	    	sortedList.addAll(params.keySet());
+	    	for (String k : sortedList) {
+	    		List<String> entries = params.get(k);
+	    		Set<String> sortedEntries = new TreeSet<String>();
+	    		sortedEntries.addAll(entries);
+	    		for (String s : sortedEntries) {
+	    			theList.add(new OAuth.Parameter(k, s));
 	    		}
 	    	}
 	    	return theList;
@@ -679,15 +686,19 @@ public class ToolConsumer implements LTISource {
 	    		String urlString, 
 	    		String type, 
 	    		String version, 
+	    		String method,
 	    		Map<String, List<String>> params)
 	    {
 	    	List<Entry<String, String>> oparams = new ArrayList<Entry<String, String>>();
+	    	Map<String, List<String>> queryParams = new HashMap<String, List<String>>();
 	    	if (urlString != null) {
 	// Check for query parameters which need to be included in the signature
 	    		try {
 	    			URL url = new URL(urlString);
-		            Map<String, List<String>> queryParams = OAuthUtil.parse_parameters(url.getQuery());
-		
+	    			String query = url.getQuery();
+	    			if (StringUtils.isNotEmpty(query)) {
+	    				queryParams = OAuthUtil.parse_parameters(url.getQuery());
+	    			}
 		            params.putAll(queryParams);
 		            
 		            // Add standard parameters
@@ -697,10 +708,13 @@ public class ToolConsumer implements LTISource {
 		            LTIUtil.setParameter(params, "oauth_callback", "about:blank");
 		            
 		            oparams = convert(params);
-
 		            
-		// Add OAuth signature     
-					OAuthMessage message = doSignature(urlString, oparams, getKey(), getSecret());
+		            if (StringUtils.isEmpty(method)) {
+		            	method = "POST";
+		            }
+		            
+		// Add OAuth signature
+					OAuthMessage message = doSignature(urlString, oparams, getKey(), getSecret(), method);
 					oparams = message.getParameters(); //replace with signed parameters
 		// Remove parameters being passed on the query string
 					oparams = removeQueryParams(oparams, queryParams);
@@ -753,7 +767,7 @@ public class ToolConsumer implements LTISource {
 			    oparams = convert(params);
 			    
 	// Add OAuth signature
-			    OAuthMessage message = doSignature(endpoint, oparams, consumerKey, consumerSecret);
+			    OAuthMessage message = doSignature(endpoint, oparams, consumerKey, consumerSecret, method);
 			    oparams = message.getParameters();
 			    
 	// Remove parameters being passed on the query string
@@ -806,7 +820,7 @@ public class ToolConsumer implements LTISource {
 		        oparams = convert(params);
 
 		// Add OAuth signature
-		        OAuthMessage message = doSignature(endpoint, oparams, consumerKey, consumerSecret);
+		        OAuthMessage message = doSignature(endpoint, oparams, consumerKey, consumerSecret, method);
 		        
 		// Remove parameters being passed on the query string
 				oparams = removeQueryParams(message.getParameters(), queryParams);
@@ -865,12 +879,13 @@ public class ToolConsumer implements LTISource {
 				String urlString, 
 				List<Entry<String, String>> oparams,
 				String key,
-				String secret)
+				String secret,
+				String method)
 				throws IOException, OAuthException, URISyntaxException {
 			
 			OAuthConsumer oAuthConsumer = new OAuthConsumer("about:blank", key, secret, null);
 			OAuthAccessor oAuthAccessor = new OAuthAccessor(oAuthConsumer);
-			OAuthMessage message = new OAuthMessage("POST", urlString, oparams);
+			OAuthMessage message = new OAuthMessage(method, urlString, oparams);
 			message.sign(oAuthAccessor);
 			return message;
 		}

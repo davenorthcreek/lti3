@@ -15,7 +15,9 @@ public class TestToolProvider extends ToolProvider {
 	
 	@Override
 	public boolean onLaunch() {
-		return false;
+		System.out.println("OnLaunch");
+		System.out.println("TODO: load user, resource_link, context from environment somehow");
+		return true;
 	}
 	
 	@Override
