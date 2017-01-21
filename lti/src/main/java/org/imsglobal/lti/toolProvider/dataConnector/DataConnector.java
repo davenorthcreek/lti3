@@ -214,11 +214,11 @@ public class DataConnector {
 	/**
 	 * Load tool proxy object.
 	 *
-	 * @param ToolProxy $toolProxy ToolProxy object
+	 * @param MediaTypeToolProxy $toolProxy ToolProxy object
 	 *
 	 * @return boolean True if the tool proxy object was successfully loaded
 	 */
-	    public boolean loadToolProxy(ToolProxy toolProxy)
+	    public boolean loadToolProxy(org.imsglobal.lti.toolProvider.ToolProxy toolProxy)
 	    {
 
 	        DateTime now = DateTime.now();
@@ -232,7 +232,7 @@ public class DataConnector {
 	/**
 	 * Save tool proxy object.
 	 *
-	 * @param ToolProxy $toolProxy ToolProxy object
+	 * @param MediaTypeToolProxy $toolProxy ToolProxy object
 	 *
 	 * @return boolean True if the tool proxy object was successfully saved
 	 */
@@ -248,7 +248,7 @@ public class DataConnector {
 	/**
 	 * Delete tool proxy object.
 	 *
-	 * @param ToolProxy $toolProxy ToolProxy object
+	 * @param MediaTypeToolProxy $toolProxy ToolProxy object
 	 *
 	 * @return boolean True if the tool proxy object was successfully deleted
 	 */

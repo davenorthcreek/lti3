@@ -170,9 +170,9 @@ public class User {
 /**
  * User record ID value.
  *
- * @var string id
+ * @var int id
  */
-    private String id = null;
+    private int id = 0;
 /**
  * user ID as supplied in the last connection request.
  *
@@ -278,9 +278,9 @@ public class User {
 /**
  * Get record ID of user.
  *
- * @return String Record ID of user
+ * @return int Record ID of user
  */
-    public String getRecordId()
+    public int getRecordId()
     {
 
         return this.id;
@@ -290,9 +290,9 @@ public class User {
 /**
  * Set record ID of user.
  *
- * @param String id  Record ID of user
+ * @param int id  Record ID of user
  */
-    public void setRecordId(String id)
+    public void setRecordId(int id)
     {
 
         this.id = id;
@@ -336,7 +336,7 @@ public class User {
     
     public String getId(int idScope)
     {
-
+    	String scopedId;
         if (idScope == 0) {
             if (resourceLink != null) {
                 idScope = resourceLink.getConsumer().idScope;
@@ -346,28 +346,28 @@ public class User {
         }
         switch (idScope) {
             case ToolProvider.ID_SCOPE_GLOBAL:
-                id = this.getResourceLink().getKey() + ToolProvider.ID_SCOPE_SEPARATOR + ltiUserId;
+                scopedId = this.getResourceLink().getKey() + ToolProvider.ID_SCOPE_SEPARATOR + ltiUserId;
                 break;
             case ToolProvider.ID_SCOPE_CONTEXT:
-                id = this.getResourceLink().getKey();
-                if (resourceLink.getContextId() != null) {
-                    id += ToolProvider.ID_SCOPE_SEPARATOR + this.resourceLink.getContextId();
+                scopedId = this.getResourceLink().getKey();
+                if (resourceLink.getContextId() != 0) {
+                    scopedId += ToolProvider.ID_SCOPE_SEPARATOR + String.valueOf(this.resourceLink.getContextId());
                 }
-                id += ToolProvider.ID_SCOPE_SEPARATOR + this.ltiUserId;
+                scopedId += ToolProvider.ID_SCOPE_SEPARATOR + this.ltiUserId;
                 break;
             case ToolProvider.ID_SCOPE_RESOURCE:
-                id = this.getResourceLink().getKey();
+                scopedId = this.getResourceLink().getKey();
                 if (this.resourceLink.getLtiResourceLinkId() != null) {
-                    id += ToolProvider.ID_SCOPE_SEPARATOR + this.resourceLink.getLtiResourceLinkId();
+                	scopedId += ToolProvider.ID_SCOPE_SEPARATOR + this.resourceLink.getLtiResourceLinkId();
                 }
-                id += ToolProvider.ID_SCOPE_SEPARATOR + this.ltiUserId;
+                scopedId += ToolProvider.ID_SCOPE_SEPARATOR + this.ltiUserId;
                 break;
             default:
-                id = this.ltiUserId;
+            	scopedId = this.ltiUserId;
                 break;
         }
 
-        return id;
+        return scopedId;
 
     }
     
@@ -484,7 +484,7 @@ public class User {
  *
  * @return User  User object
  */
-    public static User fromRecordId(String id, DataConnector dataConnector)
+    public static User fromRecordId(int id, DataConnector dataConnector)
     {
 
         User user = new User();
@@ -550,10 +550,10 @@ public class User {
  * @return boolean True if the user object was successfully loaded
  */
     private boolean load() {
-    	return load(null);
+    	return load(0);
     }
     
-    private boolean load(String id)
+    private boolean load(int id)
     {
 
         this.initialize();

@@ -54,7 +54,10 @@ Version history:
 */
 public class LTIUtil {
 
-	public static Map<String, List<String>> setParameter(Map<String, List<String>> parameters, String name, String value) {
+	public static Map<String, List<String>> setParameter(
+			Map<String, List<String>> parameters, 
+			String name, 
+			String value) {
 		if (parameters.containsKey(name)) {
 			List<String> itemList = parameters.get(name);
 			if (itemList.contains(value)) {
@@ -70,7 +73,24 @@ public class LTIUtil {
 		}
 		return parameters;
 	}
-
+	
+	public static Map<String, List<String>> setSingleParameter(
+			Map<String, List<String>> parameters, 
+			String name, 
+			String value) {
+		if (parameters.containsKey(name)) {
+			//we want a list with only the provided value
+			List<String> itemList = parameters.get(name);
+			itemList.clear();
+			itemList.add(value);
+			parameters.put(name, itemList);
+		} else {
+			List<String> itemList = new ArrayList<String>();
+			itemList.add(value);
+			parameters.put(name, itemList);
+		}
+		return parameters;
+	}
 
 
 /**

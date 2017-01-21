@@ -12,12 +12,6 @@ public class ResourceLinkShare {
 	 */
 
 	/**
-	 * Consumer key value.
-	 *
-	 * @var string consumerKey
-	 */
-	    public String consumerKey = null;
-	/**
 	 * Resource link ID value.
 	 *
 	 * @var string resourceLinkId
@@ -34,7 +28,7 @@ public class ResourceLinkShare {
 	 *
 	 * @var boolean approved
 	 */
-	    public boolean approved;
+	    public Boolean approved;
 
 	/**
 	 * Class constructor.
@@ -43,14 +37,7 @@ public class ResourceLinkShare {
 	    {
 	    }
 
-	public String getConsumerKey() {
-		return consumerKey;
-	}
-
-	public void setConsumerKey(String consumerKey) {
-		this.consumerKey = consumerKey;
-	}
-
+	
 	public String getResourceLinkId() {
 		return resourceLinkId;
 	}
@@ -67,11 +54,11 @@ public class ResourceLinkShare {
 		this.title = title;
 	}
 
-	public boolean isApproved() {
+	public Boolean isApproved() {
 		return approved;
 	}
 
-	public void setApproved(boolean approved) {
+	public void setApproved(Boolean approved) {
 		this.approved = approved;
 	}
 	

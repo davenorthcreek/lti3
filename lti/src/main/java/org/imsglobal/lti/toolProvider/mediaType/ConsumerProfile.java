@@ -60,6 +60,12 @@ public class ConsumerProfile {
 	public void setProduct(Product product) {
 		this.product = product;
 	}
+
+	public String toJson() {
+		// TODO Auto-generated method stub
+		// TODO convert values into JSON so interoperable with PHP
+		return null;
+	}
 	
 	
 	

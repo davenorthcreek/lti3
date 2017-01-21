@@ -37,7 +37,7 @@ import org.imsglobal.lti.profile.ServiceDefinition;
 import org.imsglobal.lti.toolProvider.dataConnector.DataConnector;
 import org.imsglobal.lti.toolProvider.mediaType.ConsumerProfile;
 import org.imsglobal.lti.toolProvider.mediaType.JSONContext;
-import org.imsglobal.lti.toolProvider.mediaType.ToolProxy;
+import org.imsglobal.lti.toolProvider.mediaType.MediaTypeToolProxy;
 import org.imsglobal.lti.toolProvider.mediaType.ToolService;
 import org.joda.time.DateTime;
 import org.json.simple.JSONObject;
@@ -529,7 +529,7 @@ public class ToolProvider {
 	    	methods.add("POST");
 	        ServiceDefinition toolProxyService = findService("application/vnd.ims.lti.v2.toolproxy+json", methods);
 	        String secret = DataConnector.getRandomString(12);
-	        ToolProxy toolProxy = new ToolProxy(this, toolProxyService, secret);
+	        MediaTypeToolProxy toolProxy = new MediaTypeToolProxy(this, toolProxyService, secret);
 	        Map<String, List<String>> proxyMap = toolProxy.toMap();
 	        LTIMessage http = consumer.doServiceRequest(
 	        		toolProxyService, 

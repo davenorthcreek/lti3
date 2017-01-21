@@ -42,9 +42,9 @@ public class ResourceLinkShareKey {
 	/**
 	 * ID for resource link being shared.
 	 *
-	 * @var string resourceLinkId
+	 * @var int resourceLinkId
 	 */
-	    private String resourceLinkId = null;
+	    private int resourceLinkId = 0;
 	/**
 	 * Length of share key.
 	 *
@@ -93,7 +93,7 @@ public class ResourceLinkShareKey {
 	    public ResourceLinkShareKey(ResourceLink resourceLink) {
 	    	this.initialize();
 	        this.dataConnector = resourceLink.getDataConnector();
-	        this.resourceLinkId = String.valueOf(resourceLink.getRecordId());
+	        this.resourceLinkId = resourceLink.getRecordId();
 	    }
 	    
 	    public ResourceLinkShareKey(ResourceLink resourceLink, String id)
@@ -101,7 +101,7 @@ public class ResourceLinkShareKey {
 
 	        this.initialize();
 	        this.dataConnector = resourceLink.getDataConnector();
-	        this.resourceLinkId = String.valueOf(resourceLink.getRecordId());
+	        this.resourceLinkId = resourceLink.getRecordId();
 	        this.id = id;
 	        this.load();
 
@@ -203,11 +203,11 @@ public class ResourceLinkShareKey {
 
 	    }
 
-	public String getResourceLinkId() {
+	public int getResourceLinkId() {
 		return resourceLinkId;
 	}
 
-	public void setResourceLinkId(String resourceLinkId) {
+	public void setResourceLinkId(int resourceLinkId) {
 		this.resourceLinkId = resourceLinkId;
 	}
 

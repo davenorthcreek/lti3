@@ -1047,6 +1047,17 @@ public class ToolConsumer implements LTISource {
 	public void setToolProxyMap(Map<String, List<String>> toolProxyMap) {
 		this.toolProxyMap = toolProxyMap;
 	}
+
+	public void setToolProxy(String string) {
+		// TODO Auto-generated method stub
+		// TODO parse string into map, I guess
+	}
+
+	public String getToolProxy() {
+		// TODO Auto-generated method stub
+		// TODO Serialize ToolProxyMap to a string
+		return null;
+	}
 	
 	
 

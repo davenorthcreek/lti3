@@ -8,8 +8,9 @@ import java.util.Map;
 import org.imsglobal.lti.LTIUtil;
 import org.imsglobal.lti.profile.ServiceDefinition;
 import org.imsglobal.lti.toolProvider.ToolProvider;
+import org.joda.time.DateTime;
 
-public class ToolProxy {
+public class MediaTypeToolProxy {
 
 /**
  * Class to represent an LTI Tool Proxy media type
@@ -43,7 +44,7 @@ public class ToolProxy {
  * @param ServiceDefinition toolProxyService  Tool Proxy service
  * @param string secret  Shared secret
  */
-    public ToolProxy (ToolProvider toolProvider, ServiceDefinition toolProxyService, String secret)
+    public MediaTypeToolProxy (ToolProvider toolProvider, ServiceDefinition toolProxyService, String secret)
     {
     	contexts = new ArrayList<String>();
     	
@@ -56,7 +57,7 @@ public class ToolProxy {
     	setToolProfile(new ToolProfile(toolProvider));
     	setSecurityContract(new SecurityContract(toolProvider, secret));
     }
-	
+    
 	
 	public String getLti_version() {
 		return lti_version;
@@ -126,7 +127,8 @@ public class ToolProxy {
 	public void setSecurityContract(SecurityContract securityContract) {
 		this.securityContract = securityContract;
 	}
-	    
+
+
 	public Map<String, List<String>> toMap() {
 		Map<String, List<String>> ret = new HashMap<String, List<String>>();
 		LTIUtil.setParameter(ret, "lti_version", getLti_version());

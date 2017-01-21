@@ -169,7 +169,7 @@ public class ResourceLink implements LTISource {
  *
  * @var boolean shareApproved
  */
-    private boolean shareApproved;
+    private Boolean shareApproved = null;
 /**
  * Date/time when the object was created.
  *
@@ -210,9 +210,9 @@ public class ResourceLink implements LTISource {
 /**
  * Context ID for this resource link.
  *
- * @var String contextId
+ * @var int contextId
  */
-    private String contextId = null;
+    private int contextId = 0;
 /**
  * Setting values (LTI parameters, custom parameters and local parameters).
  *
@@ -323,7 +323,7 @@ public class ResourceLink implements LTISource {
     {
 
         if (consumer == null) {
-            if ((context != null) || (contextId != null)) {
+            if ((context != null) || (contextId != 0)) {
                 consumer = getContext().getConsumer();
             } else {
                 consumer = ToolConsumer.fromRecordId(consumerId, this.getDataConnector());
@@ -355,7 +355,7 @@ public class ResourceLink implements LTISource {
     public Context getContext()
     {
 
-        if (context == null && contextId != null) {
+        if (context == null && contextId != 0) {
             this.context = Context.fromRecordId(this.contextId, this.getDataConnector());
         }
 
@@ -368,7 +368,7 @@ public class ResourceLink implements LTISource {
  *
  * @return int Context record ID for this resource link.
  */
-    public String getContextId()
+    public int getContextId()
     {
 
         return this.contextId;
@@ -380,7 +380,7 @@ public class ResourceLink implements LTISource {
  *
  * @param int contextId   Context ID for this resource link.
  */
-    public void setContextId(String contextId)
+    public void setContextId(int contextId)
     {
 
         this.context = null;
@@ -1015,7 +1015,7 @@ public class ResourceLink implements LTISource {
     public boolean hasMembershipService()
     {
 
-        boolean has = (this.contextId != null);
+        boolean has = (this.contextId != 0);
         if (has) {
             has = StringUtils.isNotEmpty(this.getContext().getSetting("custom_context_memberships_url"));
         }
@@ -1033,7 +1033,7 @@ public class ResourceLink implements LTISource {
     {
 
         List<User> response = null;
-        if (this.contextId != null) {
+        if (this.contextId != 0) {
             String url = this.getContext().getSetting("custom_context_memberships_url");
             if (StringUtils.isNotEmpty(url)) {
                 Membership service = new Membership(this, url);
@@ -1529,11 +1529,11 @@ public class ResourceLink implements LTISource {
 		this.extResponseHeaders = extResponseHeaders;
 	}
 
-	public boolean isShareApproved() {
+	public Boolean isShareApproved() {
 		return shareApproved;
 	}
 
-	public void setShareApproved(boolean shareApproved) {
+	public void setShareApproved(Boolean shareApproved) {
 		this.shareApproved = shareApproved;
 	}
 

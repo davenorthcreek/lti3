@@ -6,6 +6,7 @@ import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
 import org.imsglobal.lti.LTIMessage;
+import org.imsglobal.lti.LTIUtil;
 import org.imsglobal.lti.toolProvider.dataConnector.DataConnector;
 import org.imsglobal.lti.toolProvider.service.Membership;
 import org.imsglobal.lti.toolProvider.service.Service;
@@ -41,7 +42,7 @@ public class Context implements LTISource {
 	 *
 	 * @var array settings
 	 */
-	    private Map<String, String> settings = new HashMap<String, String>();
+	    private Map<String, List<String>> settings = new HashMap<String, List<String>>();
 	/**
 	 * Date/time when the object was created.
 	 *
@@ -70,9 +71,9 @@ public class Context implements LTISource {
 	/**
 	 * ID for this context.
 	 *
-	 * @var String id
+	 * @var int id
 	 */
-	    private String id = null;
+	    private int id = 0;
 	/**
 	 * Whether the settings value have changed since last saved.
 	 *
@@ -103,7 +104,7 @@ public class Context implements LTISource {
 	    {
 
 	        this.setTitle("");
-	        this.settings = new HashMap<String, String>();
+	        this.settings = new HashMap<String, List<String>>();
 	        this.created = null;
 	        this.updated = null;
 
@@ -198,7 +199,7 @@ public class Context implements LTISource {
 	    public String getId()
 	    {
 
-	        return this.ltiContextId;
+	        return this.getLtiContextId();
 
 	    }
 
@@ -207,7 +208,7 @@ public class Context implements LTISource {
 	 *
 	 * @return int Context record ID value
 	 */
-	    public String getRecordId()
+	    public int getRecordId()
 	    {
 
 	        return this.id;
@@ -219,7 +220,7 @@ public class Context implements LTISource {
 	 *
 	 * @return int id  Context record ID value
 	 */
-	    public void setRecordId(String id)
+	    public void setRecordId(int id)
 	    {
 
 	        this.id = id;
@@ -255,7 +256,7 @@ public class Context implements LTISource {
 	    {
 	    	String value = dflt;
 	        if (this.settings.containsKey(name)) {
-	            value = this.settings.get(name);
+	            value = this.settings.get(name).iterator().next();
 	        }
 
 	        return value;
@@ -274,7 +275,7 @@ public class Context implements LTISource {
 	        String old_value = this.getSetting(name);
 	        if (value != old_value) {
 	            if (StringUtils.isNotEmpty(value)) {
-	                this.settings.put(name, value);
+	            	LTIUtil.setSingleParameter(settings, name, value);
 	            } else {
 	            	this.settings.remove(name);
 	            }
@@ -288,7 +289,7 @@ public class Context implements LTISource {
 	 *
 	 * @return array Associative array of setting values
 	 */
-	    public Map<String, String> getSettings()
+	    public Map<String, List<String>> getSettings()
 	    {
 
 	        return this.settings;
@@ -300,10 +301,10 @@ public class Context implements LTISource {
 	 *
 	 * @param array settings Associative array of setting values
 	 */
-	    public void setSettings(Map<String, String> settings)
+	    public void setSettings(Map<String, List<String>> settings2)
 	    {
 
-	        this.settings = settings;
+	        this.settings = settings2;
 
 	    }
 
@@ -432,7 +433,7 @@ public class Context implements LTISource {
 	 *
 	 * @return Context    Context object
 	 */
-	    public static Context fromRecordId(String id, DataConnector dataConnector)
+	    public static Context fromRecordId(int id, DataConnector dataConnector)
 	    {
 
 	        Context context = new Context();
@@ -460,7 +461,7 @@ public class Context implements LTISource {
 	        Context context = new Context();
 	        context.consumer = consumer;
 	        context.dataConnector = consumer.getDataConnector();
-	        context.ltiContextId = ltiContextId;
+	        context.setLtiContextId(ltiContextId);
 	        if (StringUtils.isNotEmpty(ltiContextId)) {
 	            context.load();
 	        }
@@ -480,7 +481,7 @@ public class Context implements LTISource {
 	 *
 	 * @return boolean True if context was successfully loaded
 	 */
-    private boolean load(String id)
+    private boolean load(int id)
     {
 
         this.initialize();
@@ -512,6 +513,14 @@ public class Context implements LTISource {
 
 	public void setTitle(String title) {
 		this.title = title;
+	}
+
+	public String getLtiContextId() {
+		return ltiContextId;
+	}
+
+	public void setLtiContextId(String ltiContextId) {
+		this.ltiContextId = ltiContextId;
 	}
 
 }
