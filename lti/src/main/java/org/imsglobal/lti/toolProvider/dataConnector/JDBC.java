@@ -31,7 +31,6 @@ import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 
 import com.google.gson.Gson;
-import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
 
@@ -717,7 +716,7 @@ public class JDBC extends DataConnector {
 	    	  resourceLink.setLtiResourceLinkId(rs.getString("lti_resource_link_id"));
 	    	  Map<String, List<String>> settings = unserialize(rs.getString("settings"));
               resourceLink.setSettings(settings);
-	    	  resourceLink.setPrimaryResourceLinkId(rs.getString("primary_resource_link_pk"));
+	    	  resourceLink.setPrimaryResourceLinkId(rs.getInt("primary_resource_link_pk"));
 	    	  resourceLink.setShareApproved(rs.getInt("share_approved") != 0);
 	    	  resourceLink.setCreated(new DateTime(rs.getTimestamp("created")));
   	          resourceLink.setUpdated(new DateTime(rs.getTimestamp("updated")));
@@ -750,8 +749,8 @@ public class JDBC extends DataConnector {
 	    } else {
 	    	approved = 0;
 	    }
-	    String primaryResourceLinkId = null;
-        if (StringUtils.isNotEmpty(resourceLink.getPrimaryResourceLinkId())) {
+	    int primaryResourceLinkId = 0;
+        if (resourceLink.getPrimaryResourceLinkId() != 0) {
             primaryResourceLinkId = resourceLink.getPrimaryResourceLinkId();
         }
         DateTime now = DateTime.now();
@@ -788,7 +787,7 @@ public class JDBC extends DataConnector {
 		    	}
 			    stmt.setString(3, resourceLink.getLtiResourceLinkId());
 			    stmt.setString(4, settingsValue);
-			    stmt.setString(5, primaryResourceLinkId);
+			    stmt.setInt(5, primaryResourceLinkId);
 		        stmt.setInt(6, approved);
 	            stmt.setTimestamp(7, new Timestamp(now.getMillis()));
 	  	        stmt.setTimestamp(8, new Timestamp(now.getMillis()));
@@ -806,7 +805,7 @@ public class JDBC extends DataConnector {
 		    	}
 			    stmt.setString(2, resourceLink.getLtiResourceLinkId());
 			    stmt.setString(3, settingsValue);
-			    stmt.setString(4, primaryResourceLinkId);
+			    stmt.setInt(4, primaryResourceLinkId);
 		        stmt.setInt(5, approved);
 	            stmt.setTimestamp(6, new Timestamp(now.getMillis()));
 	            stmt.setInt(7, contextId);
@@ -820,7 +819,7 @@ public class JDBC extends DataConnector {
 		    	stmt.setNull(1, java.sql.Types.INTEGER); //will always be null
 			    stmt.setString(2, resourceLink.getLtiResourceLinkId());
 			    stmt.setString(3, settingsValue);
-			    stmt.setString(4, primaryResourceLinkId);
+			    stmt.setInt(4, primaryResourceLinkId);
 		        stmt.setInt(5, approved);
 	            stmt.setTimestamp(6, new Timestamp(now.getMillis()));
 	            stmt.setInt(7, consumerId);

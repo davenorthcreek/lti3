@@ -1269,8 +1269,8 @@ public class ToolProvider {
 	// Set the request resource link
 	            String rlId = request.getParameter("resource_link_id");
 	            if (StringUtils.isNotEmpty(rlId)) {
-	                String contentItemId = request.getParameter("custom_content_item_id");
-	                resourceLink = ResourceLink.fromConsumer(consumer,rlId.trim(), contentItemId);
+	            	String contentItemId = request.getParameter("custom_content_item_id");
+	                resourceLink = ResourceLink.fromConsumer(consumer, rlId, contentItemId);
 	                if (context != null) {
 	                    resourceLink.setContextId(context.getRecordId());
 	                }
@@ -1479,7 +1479,7 @@ public class ToolProvider {
 	        boolean doSaveResourceLink = true;
 
 	        String key = this.resourceLink.getPrimaryConsumerKey();
-	        String id = this.resourceLink.getPrimaryResourceLinkId();
+	        int id = this.resourceLink.getPrimaryResourceLinkId();
 	        String shareKeyValue = this.request.getParameter("custom_share_key");
 
 	        boolean isShareRequest = (shareKeyValue != null) && (shareKeyValue.length() > 0);
@@ -1491,11 +1491,11 @@ public class ToolProvider {
 	// Check if this is a new share key
 	            	ResourceLinkShareKey shareKey = new ResourceLinkShareKey(resourceLink, shareKeyValue);
 	            	
-	                if ((shareKey.getPrimaryConsumerKey() != null) && (shareKey.getResourceLinkId() != null)) {
+	                if ((shareKey.getPrimaryConsumerKey() != null) && (shareKey.getResourceLinkId() != 0)) {
 	// Update resource link with sharing primary resource link details
 	                    key = shareKey.getPrimaryConsumerKey();
 	                    id = shareKey.getResourceLinkId();
-	                    ok = (!key.equals(consumer.getKey()) || !(id.equals(resourceLink.getId())));
+	                    ok = (!key.equals(consumer.getKey()) || !(id == resourceLink.getRecordId()));
 	                    if (ok) {
 	                        resourceLink.setPrimaryConsumerKey(key);
 	                        resourceLink.setPrimaryResourceLinkId(id);
@@ -1530,18 +1530,18 @@ public class ToolProvider {
 	            }
 	        } else {
 	// Check no share is in place
-	            ok = StringUtils.isEmpty(id);
+	            ok = id == 0;
 	            if (!ok) {
 	                reason = "You have not requested to share a resource link but an arrangement is currently in place.";
 	            }
 	        }
 
 	// Look up primary resource link
-	        if (ok && StringUtils.isNotEmpty(id)) {
+	        if (ok && id != 0) {
 	            consumer = new ToolConsumer(key, dataConnector);
 	            ok = (consumer.getCreated() != null);
 	            if (ok) {
-	                resourceLink = ResourceLink.fromConsumer(consumer, id);
+	                resourceLink = ResourceLink.fromConsumerWithPK(consumer, id);
 	                ok = (resourceLink.getCreated() != null);
 	            }
 	            if (ok) {

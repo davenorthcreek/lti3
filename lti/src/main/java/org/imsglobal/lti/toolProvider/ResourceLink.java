@@ -115,7 +115,7 @@ public class ResourceLink implements LTISource {
 /**
  * Resource link ID as supplied in the last connection request.
  *
- * @var string ltiResourceLinkId
+ * @var String ltiResourceLinkId
  */
     private String ltiResourceLinkId = null;
 /**
@@ -161,9 +161,9 @@ public class ResourceLink implements LTISource {
 /**
  * Consumer key value for resource link being shared (if any).
  *
- * @var string primaryResourceLinkId
+ * @var int primaryResourceLinkId
  */
-    private String primaryResourceLinkId = null;
+    private int primaryResourceLinkId = 0;
 /**
  * Whether the sharing request has been approved by the primary resource link.
  *
@@ -267,7 +267,7 @@ public class ResourceLink implements LTISource {
         this.groupSets = new HashMap<String,GroupSet>();
         this.groups = new HashMap<String,Group>();
         //this.primaryConsumerKey = null;
-        this.primaryResourceLinkId = null;
+        this.primaryResourceLinkId = 0;
         this.created = null;
         this.updated = null;
 
@@ -403,7 +403,7 @@ public class ResourceLink implements LTISource {
 /**
  * Get resource link ID.
  *
- * @return string ID for this resource link.
+ * @return int ID for this resource link.
  */
     public String getId()
     {
@@ -726,7 +726,7 @@ public class ResourceLink implements LTISource {
                 }
                 try {
 	                URL u = new URL(urlExt);
-	                if (this.doService(todo, new URL(urlExt), params)) {
+	                if (this.doService(todo, u, params)) {
 	                    switch (action) {
 	                        case EXT_READ:
 	                        	value = LTIUtil.getXmlChildValue(this.extDoc.getRootElement(), "textstring");
@@ -1103,9 +1103,9 @@ public class ResourceLink implements LTISource {
         resourceLink.consumer = consumer;
         resourceLink.dataConnector = consumer.getDataConnector();
         resourceLink.ltiResourceLinkId = ltiResourceLinkId;
-        if (StringUtils.isNotEmpty(ltiResourceLinkId)) {
+        if (ltiResourceLinkId != null) {
             resourceLink.load();
-            if (resourceLink.id == 0 && StringUtils.isNotEmpty(tempId)) {
+            if (resourceLink.id == 0 && tempId != null) {
                 resourceLink.ltiResourceLinkId = tempId;
                 resourceLink.load();
                 resourceLink.ltiResourceLinkId = ltiResourceLinkId;
@@ -1114,6 +1114,16 @@ public class ResourceLink implements LTISource {
 
         return resourceLink;
 
+    }
+    
+    public static ResourceLink fromConsumerWithPK(ToolConsumer consumer, int resourceLinkId) {
+    	ResourceLink resourceLink = new ResourceLink();
+        resourceLink.consumer = consumer;
+        resourceLink.dataConnector = consumer.getDataConnector();
+        resourceLink.setRecordId(resourceLinkId);
+        resourceLink.load();
+
+        return resourceLink;
     }
 
 /**
@@ -1457,11 +1467,11 @@ public class ResourceLink implements LTISource {
 
         }
 
-	public String getPrimaryResourceLinkId() {
+	public int getPrimaryResourceLinkId() {
 		return primaryResourceLinkId;
 	}
 
-	public void setPrimaryResourceLinkId(String primaryResourceLinkId) {
+	public void setPrimaryResourceLinkId(int primaryResourceLinkId) {
 		this.primaryResourceLinkId = primaryResourceLinkId;
 	}
 
